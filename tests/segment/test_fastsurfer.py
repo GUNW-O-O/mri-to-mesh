@@ -79,6 +79,49 @@ def test_command_mounts_input_and_output(tmp_path):
     assert cmd[cmd.index("--t1") + 1] == "/data/input.nii.gz"
 
 
+# --- 형제 컨테이너 경로(호스트 마운트) ---
+
+def test_host_mount_args_none_matches_current_behavior(tmp_path):
+    """두 키워드가 None이면 명령이 지금과 동일하다(회귀 확인)."""
+    t1 = _write_t1(tmp_path)
+    with_defaults = build_fastsurfer_command(t1, tmp_path / "out", "case", "fs:tag", threads=8)
+    with_explicit_none = build_fastsurfer_command(
+        t1, tmp_path / "out", "case", "fs:tag", threads=8,
+        host_t1_dir=None, host_subject_dir_root=None,
+    )
+    assert with_defaults == with_explicit_none
+
+
+def test_host_subject_dir_root_overrides_mount_but_not_sd_flag(tmp_path):
+    """host_subject_dir_root는 -v 마운트만 바꾼다 — --sd는 여전히 /output."""
+    t1 = _write_t1(tmp_path)
+    host_t1_dir = tmp_path / "host" / "nifti"
+    host_subject_dir_root = tmp_path / "host" / "out"
+    cmd = build_fastsurfer_command(
+        t1, tmp_path / "out", "case", "fs:tag",
+        host_t1_dir=host_t1_dir,
+        host_subject_dir_root=host_subject_dir_root,
+    )
+    mounts = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-v"]
+    assert any(m == f"{host_t1_dir}:/data:ro" for m in mounts)
+    assert any(m == f"{host_subject_dir_root}:/output" for m in mounts)
+    assert cmd[cmd.index("--sd") + 1] == "/output"
+
+
+def test_run_with_host_mount_args_writes_to_local_subject_dir_root(tmp_path):
+    """host_* 인자를 줘도 실제 파일은 로컬 subject_dir_root 밑에서 찾는다."""
+    t1 = _write_t1(tmp_path)
+    root = tmp_path / "out"
+    result = run_fastsurfer(
+        t1, root, "fs:tag", sid="case", runner=_ok_runner(root, "case"),
+        host_t1_dir=tmp_path / "host" / "nifti",
+        host_subject_dir_root=tmp_path / "host" / "out",
+    )
+    assert result.subject_dir == root / "case"
+    assert result.orig_path.is_file()
+    assert result.seg_source_path.is_file()
+
+
 # --- 실행·출력 추출 ---
 
 def test_run_writes_uint8_orig_and_locates_withcc_seg(tmp_path):
