@@ -5,6 +5,7 @@ labels·mesh를 순서대로 호출한다.
 """
 
 from seg_and_mesh.jobs.layout import JobPaths, job_paths, new_job_id
+from seg_and_mesh.jobs.meta import build_regions_meta, write_regions_meta
 from seg_and_mesh.jobs.status import (
     STATES,
     JobStatus,
@@ -24,4 +25,6 @@ __all__ = [
     "record_error",
     "sanitize_stderr",
     "write_status",
+    "build_regions_meta",
+    "write_regions_meta",
 ]
