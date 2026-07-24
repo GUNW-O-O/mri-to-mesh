@@ -1,3 +1,39 @@
 <!doctype html>
-<title>seg-and-mesh</title>
-<p>viewer placeholder — Task 6</p>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>seg-and-mesh 뷰어</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
+  #canvas { position: fixed; inset: 0; }
+  #panel { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,.6);
+           padding: 12px; border-radius: 8px; max-width: 320px; font-size: 13px; }
+  #panel input[type=text] { width: 180px; }
+  button { margin: 2px; }
+  #metrics { white-space: pre; font-family: monospace; font-size: 11px; margin-top: 8px; }
+  label { display: block; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "/static/vendor/three.module.js",
+  "three/addons/": "/static/vendor/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="panel">
+  <div>
+    <input id="jobId" type="text" placeholder="jobId">
+    <input id="variantId" type="text" placeholder="variantId">
+    <button id="load">로드</button>
+  </div>
+  <div>
+    <label><input type="checkbox" id="transparent"> 반투명 셸</label>
+  </div>
+  <div id="groups"></div>
+  <div id="metrics"></div>
+</div>
+<script type="module" src="/static/viewer.js"></script>
+</body>
+</html>
