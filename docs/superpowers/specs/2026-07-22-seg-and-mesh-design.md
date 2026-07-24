@@ -1,7 +1,8 @@
 # seg-and-mesh 설계
 
 - 작성일: 2026-07-22
-- 저장소: https://github.com/GUNW-O-O/seg-and-mesh
+- 저장소: https://github.com/GUNW-O-O/mri-to-mesh
+  (파이썬 패키지명은 `seg_and_mesh` 그대로다 — 리포 이름만 바뀌었다)
 - 상태: 설계 확정 대기
 
 ## 1. 무엇을 하는 도구인가
