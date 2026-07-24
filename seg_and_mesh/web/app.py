@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from seg_and_mesh.jobs.layout import JobPaths, job_paths, new_job_id
@@ -182,5 +183,9 @@ def create_app(config: AppConfig) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return (_STATIC / "index.html").read_text(encoding="utf-8")
+
+    # viewer.js와 vendor한 three.js를 서빙한다. StaticFiles는 마운트 디렉터리
+    # 밖으로 나가지 못한다(Starlette 자체 방어) — static/ 안만 노출된다.
+    app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     return app

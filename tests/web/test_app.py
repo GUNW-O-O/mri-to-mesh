@@ -91,6 +91,20 @@ def test_index_serves_viewer(tmp_path):
     assert "text/html" in r.headers["content-type"]
 
 
+def test_static_assets_serve(tmp_path):
+    """뷰어 페이지가 자기 스크립트와 vendor한 three.js를 못 받으면 통째로
+    안 뜬다 — /static 마운트가 살아 있는지 지킨다."""
+    client, _ = _client(tmp_path)
+    for path in ("/static/viewer.js", "/static/vendor/three.module.js"):
+        assert client.get(path).status_code == 200
+
+
+def test_static_mount_blocks_traversal(tmp_path):
+    """StaticFiles가 static/ 밖으로 나가지 못해야 한다(임의 파일 읽기 방지)."""
+    client, _ = _client(tmp_path)
+    assert client.get("/static/../app.py").status_code == 404
+
+
 # --- 아래는 브리프의 3개 테스트를 넘어서는 추가 커버리지다 ---
 # (§6.3 게이트가 HTTP 경계에서도 지켜지는지, 경로 검증, PHI 안전성, 404들)
 
