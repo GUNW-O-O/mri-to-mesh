@@ -1,0 +1,21 @@
+# 로컬 단독 워크벤치 (스펙 §5.1, §11). 노출하지 않는다.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    environment:
+      FASTSURFER_IMAGE: ${FASTSURFER_IMAGE}
+      FASTSURFER_THREADS: ${FASTSURFER_THREADS:-8}
+      SAM_JOBS_ROOT: /work/jobs
+      # 형제 FastSurfer 컨테이너의 -v 인자에 쓸 호스트 경로 (Task 1 to_host_path).
+      # 도커 데몬은 호스트에 있어 api 내부의 /work/jobs를 모른다.
+      SAM_HOST_JOBS_ROOT: ${OUTPUT_DIR}
+    volumes:
+      # 형제 FastSurfer 컨테이너를 띄우기 위한 docker socket (스펙 §5.1)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 잡 작업 폴더 — 호스트 OUTPUT_DIR에 바인드
+      - ${OUTPUT_DIR}:/work/jobs
+    # GPU는 api가 아니라 형제 FastSurfer 컨테이너가 docker run --gpus로 잡는다

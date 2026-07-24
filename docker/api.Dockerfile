@@ -6,12 +6,16 @@
 FROM debian:bookworm-slim
 
 # dcm2niix 1.0.20220720-1+deb12u1 (bookworm)
+# docker.io: api가 형제 FastSurfer 컨테이너를 `docker run`으로 띄우기 위한
+# docker CLI(client 포함). compose가 호스트 docker socket을 마운트해 준다 —
+# 이 이미지 안에 docker daemon은 없다(스펙 §5.1).
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
       dcm2niix \
       python3 \
       python3-venv \
       ca-certificates \
+      docker.io \
  && rm -rf /var/lib/apt/lists/*
 
 # 태그 고정. latest를 쓰지 않는다.
@@ -33,4 +37,10 @@ COPY labels/canonical-v1.tsv /app/labels/canonical-v1.tsv
 COPY tests /app/tests
 RUN uv sync --frozen
 
-CMD ["uv", "run", "--frozen", "pytest", "-W", "error"]
+# 컨테이너 안 잡 루트. compose가 여기에 호스트 OUTPUT_DIR을 바인드 마운트한다.
+ENV SAM_JOBS_ROOT=/work/jobs
+# 0.0.0.0으로 바인드해야 컨테이너 밖(호스트)에서 접근 가능하다 — 컨테이너
+# 자신의 loopback은 호스트에서 안 보인다. 실제 외부 노출 차단은
+# docker-compose.yml의 "127.0.0.1:${WEB_PORT}:8000" 퍼블리시가 맡는다.
+CMD ["uv", "run", "--frozen", "uvicorn", "seg_and_mesh.web.server:app", \
+     "--host", "0.0.0.0", "--port", "8000"]
