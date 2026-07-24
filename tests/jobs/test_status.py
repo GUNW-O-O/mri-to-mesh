@@ -114,6 +114,37 @@ def test_sanitize_keeps_diagnostic_text_without_paths_untouched():
     assert sanitize_stderr("exit status 137") == "exit status 137"
 
 
+def test_sanitize_collapses_extensionless_windows_path_with_space():
+    """확장자 없는 파일명(예: 확장자 없는 필립스 DICOM 'IM0001')은 윈도우
+    경로 정규식이 멈출 지점이 없어 공백마다 토큰이 쪼개진다 — 마스킹 사이에
+    낀 가운데 토막까지 접어야 이름이 안 샌다."""
+    out = sanitize_stderr(r"C:\Users\Hong Gil Dong\Desktop\IM0001 not found")
+    assert "Hong" not in out and "Gil" not in out and "Dong" not in out
+    assert "not found" in out
+
+
+def test_sanitize_collapses_extensionless_unc_path_with_space():
+    out = sanitize_stderr(r"\\SERVER\Share Name\Hong Gil Dong\IM0001 not found")
+    assert "Hong" not in out and "Gil" not in out and "Dong" not in out
+    assert "not found" in out
+
+
+def test_sanitize_collapses_three_word_name_fully():
+    """가운데 토큰이 인접 구분자가 없는 3어절 이름도 끝까지 접힌다(고정점
+    반복이 없으면 첫 결합만 되고 멈춘다)."""
+    out = sanitize_stderr(r"C:\Users\Hong Gil Dong\Desktop\IM0001 failed")
+    assert "Hong" not in out
+    assert "Gil" not in out
+    assert "Dong" not in out
+
+
+def test_sanitize_keeps_engine_version_string_intact():
+    """dcm2niix 버전 문자열은 순수 숫자 확장자라 파일로 오인하면 안 된다 —
+    엔진 실패 진단의 핵심 정보다."""
+    out = sanitize_stderr("dcm2niix v1.0.20211006 failed")
+    assert out == "dcm2niix v1.0.20211006 failed"
+
+
 def test_write_status_rejects_unknown_state(tmp_path):
     p = job_paths(tmp_path, "job1").create()
     s = _new_status()

@@ -35,10 +35,17 @@ _UNC_PATH_RE = re.compile(
 _TOKEN_PATH_RE = re.compile(r"\S*[/\\]\S+")
 #: 확장자가 있는 맨 파일명(경로 구분자 없음). 화이트리스트를 안 둔다 —
 #: dcm2niix는 SeriesDescription으로 사이드카 파일명을 짓는다
-#: (io/dcm2niix.py 참고, 예: "5_T1.nii_repeat.json"). "7.79"·"2.00" 같은
-#: 소수를 파일로 오인하지 않도록, 토큰 안에 글자가 하나는 있어야 한다는
-#: 조건(전방탐색)을 둔다.
-_FILE_RE = re.compile(r"\b(?=[\w.\-]*[A-Za-z])[\w.\-]+\.[A-Za-z0-9]{1,10}\b")
+#: (io/dcm2niix.py 참고, 예: "5_T1.nii_repeat.json"). 버전 문자열
+#: ("v1.0.20211006")까지 파일로 오인하지 않도록, "글자가 토큰 어딘가에
+#: 있다"가 아니라 "확장자 자체에 글자가 있다"를 조건(전방탐색)으로 건다 —
+#: 순수 숫자 확장자(".20211006")는 그래서 걸러진다.
+_FILE_RE = re.compile(r"\b[\w.\-]+\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,10}\b")
+#: 위 네 패턴은 공백에서 끊긴다 — "Hong Gil Dong" 같은 확장자 없는 이름은
+#: 토큰별로 따로 마스킹돼 가운데 토막(Gil)이 두 <path> 사이에 그대로
+#: 남는다. 마스킹 두 개 사이에 낀 토큰 하나(또는 0개)는 원래 한 경로/이름이
+#: 공백에 잘린 조각이라고 보고 통째로 접는다. 고정점까지 반복 적용해야
+#: 3어절 이상의 이름도 끝까지 접힌다(sanitize_stderr 참고).
+_ADJACENT_MASK_RE = re.compile(r"(?:<path>|<file>)(?:\s+\S+)?\s+(?:<path>|<file>)")
 
 
 def now_iso() -> str:
@@ -89,12 +96,36 @@ class JobStatus:
         )
 
 
+def _collapse_adjacent_masks(text: str) -> str:
+    """<path> 조각 사이에 낀 토큰을 접어 하나로 합친다.
+
+    고정점까지 반복한다 — 한 번의 sub는 왼쪽에서 오른쪽으로 겹치지 않게만
+    훑어서, "<path> Gil <path> Dong <path>"처럼 마스킹이 세 개 이상 이어지면
+    첫 결합만 먹고 끝난다. 그대로면 멈춘다.
+    """
+    while True:
+        collapsed = _ADJACENT_MASK_RE.sub("<path>", text)
+        if collapsed == text:
+            return collapsed
+        text = collapsed
+
+
 def sanitize_stderr(text: str) -> str:
     """경로·파일명 토큰을 모양으로 마스킹한다. 나머지 진단 문구는 남긴다.
 
-    잡는 것: POSIX/윈도우/UNC 절대경로, 구분자가 든 상대경로, 확장자가 있는
-    맨 파일명(화이트리스트 없음) — 전부 "모양"으로 판단하지 확장자 목록으로
-    판단하지 않는다.
+    잡는 것: POSIX/윈도우/UNC 절대경로(폴더명 공백 허용), 구분자가 든
+    상대경로, 확장자가 있는 맨 파일명(화이트리스트 없음) — 전부 "모양"으로
+    판단하지 확장자 목록으로 판단하지 않는다. 윈도우/UNC 경로는 확장자
+    앞에서만 멈추므로 공백 포함 경로 하나가 여러 토큰으로 쪼개질 수 있는데,
+    그중 확장자 없는 조각(예: 파일명이 IM0001처럼 확장자가 없는 필립스
+    DICOM)은 공백에서 끊긴 맨 토큰으로 남는다 — 그래서 마지막에
+    _collapse_adjacent_masks로 마스킹 사이에 낀 토막을 접어 붙인다.
+
+    과다 마스킹과 과소 마스킹이 충돌하면 항상 과다 마스킹을 택한다 —
+    진단 문구 한 토막을 잃는 비용은, 환자 식별자 하나가 새는 비용보다
+    항상 작다. self.conv1.weight 같은 점으로 이어진 속성 체인이 파일명과
+    모양이 같아서 <file>로 뭉개지는 것도 이 원칙에 따른 의도된 동작이다 —
+    모양만으로는 진짜 파일명과 구별할 수 없어서 따로 봐주지 않는다.
 
     못 잡는 것(의도적 한계): 구분자도 확장자도 없는 맨 식별자
     (예: "FastSurferCNN failed for subject Hong Gil Dong")는 평범한 문장과
@@ -108,6 +139,7 @@ def sanitize_stderr(text: str) -> str:
     text = _UNC_PATH_RE.sub("<path>", text)
     text = _TOKEN_PATH_RE.sub("<path>", text)
     text = _FILE_RE.sub("<file>", text)
+    text = _collapse_adjacent_masks(text)
     return text.strip()
 
 
