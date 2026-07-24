@@ -192,27 +192,50 @@ def test_glb_missing_variant_is_404(tmp_path):
     assert r.status_code == 404
 
 
-def test_path_traversal_in_job_id_is_rejected(tmp_path):
-    """job_id·variant_id는 URL 경로 조각이지만 파일 경로 조립에도 쓰이므로,
-    ".."이나 구분자가 섞이면 jobs_root 밖을 가리키는 경로 조작이 된다.
-
-    HTTP 클라이언트가 순수 ".." 세그먼트는 보내기 전에 정규화(RFC 3986)해
-    버리므로, 여기서는 정규화되지 않는 형태(순수 ".." 토큰이 아닌 문자열,
-    URL 인코딩된 역슬래시)로 서버 쪽 검증을 직접 겨냥한다.
+def test_dotted_job_id_is_not_falsely_rejected(tmp_path):
+    """"a..b"는 ".."을 부분 문자열로 포함하지만 실제로는 jobs_root를 벗어나지
+    않는, 그냥 점 두 개가 든 평범한 이름이다. 문자 블랙리스트라면 이것도
+    걸리겠지만(과잉 차단), 결합 결과가 실제로 jobs_root 밖인지로 판단하는
+    지금 방식은 이런 무해한 이름을 잘못 막지 않는다 — 해당 잡이 없어서
+    나는 404여야지, 검증에 걸린 400이면 안 된다.
     """
     client, _ = _client(tmp_path)
 
     r = client.get("/api/jobs/a..b")
-    assert r.status_code == 400
+    assert r.status_code == 404
 
     r = client.post("/api/jobs/a..b/series", json={"niftiPath": "x"})
-    assert r.status_code == 400
+    assert r.status_code == 404
 
     r = client.get("/api/jobs/foo/variants/a..b/regions.glb")
-    assert r.status_code == 400
+    assert r.status_code == 404
 
-    r = client.get("/api/jobs/foo/variants/a%5Cb/regions.glb")
-    assert r.status_code == 400
+
+def test_windows_drive_relative_job_id_is_rejected(tmp_path):
+    """윈도우 드라이브-상대 경로("D:evil", "D:")는 "/", "\\", ".." 중 아무것도
+    안 쓰고도 `Path(base) / value`에서 base를 통째로 버린다(PureWindowsPath
+    결합 규칙) — 문자 블랙리스트로는 못 잡고, 결합 결과가 jobs_root 밑인지
+    확인해야만 잡힌다.
+
+    주의: jobs_root와 같은 드라이브 문자(예: jobs_root가 C:\\...일 때 "C:")는
+    pathlib이 "같은 드라이브의 현재 경로"로 취급해 base를 버리지 않으므로
+    (진짜 탈출이 아니다) 여기서는 다루지 않는다 — 실제 탈출은 jobs_root와
+    다른 드라이브 문자를 썼을 때다.
+    """
+    client, _ = _client(tmp_path)
+
+    for bad in ("D:evil", "D:", "D:secret.txt"):
+        r = client.get(f"/api/jobs/{bad}")
+        assert r.status_code == 400, f"{bad!r}: {r.status_code}"
+
+        r = client.post(f"/api/jobs/{bad}/series", json={"niftiPath": "x"})
+        assert r.status_code == 400, f"{bad!r}: {r.status_code}"
+
+        r = client.get(f"/api/jobs/foo/variants/{bad}/regions.glb")
+        assert r.status_code == 400, f"{bad!r}: {r.status_code}"
+
+        r = client.get(f"/api/jobs/foo/variants/{bad}/regions-meta.json")
+        assert r.status_code == 400, f"{bad!r}: {r.status_code}"
 
 
 def test_upload_filename_traversal_is_contained(tmp_path):
@@ -238,14 +261,18 @@ def test_upload_filename_traversal_is_contained(tmp_path):
 def test_upload_failure_is_phi_safe(tmp_path):
     """판별 실패 업로드가 환자 식별 파일명을 status.json이나 응답에 남기지 않는다.
 
-    실제로 오늘 리포에 환자 이름이 샌 사고가 있었으므로, 가짜 이름으로만
-    검증한다 — test-asset/의 실제 이름을 절대 베끼지 않는다.
+    확장자도 구분자도 없는 맨 이름(필립스 DICOM처럼)을 일부러 쓴다 —
+    sanitize_stderr는 이 모양을 의도적으로 건드리지 않으므로(스펙 §12 참고,
+    status.py 문서), input.filename에 그런 이름이 그대로 남는지가 바로
+    이 테스트가 잡아야 하는 구멍이다. 실제로 오늘 리포에 환자 이름이 샌
+    사고가 있었으므로, 가짜 이름으로만 검증한다 — test-asset/의 실제
+    이름을 절대 베끼지 않는다.
     """
     client, _ = _client(tmp_path)
-    fake_patient_name = "Jane_Q_Placeholder"
+    fake_patient_name = "Jane_Q_Placeholder"  # 확장자·구분자 없는 맨 이름
     r = client.post(
         "/api/jobs",
-        files={"file": (f"{fake_patient_name}_scan.bin", b"not a real medical image, just garbage bytes")},
+        files={"file": (fake_patient_name, b"not a real medical image, just garbage bytes")},
     )
     # 업로드 자체는 잡을 만들고(ingest_job이 내부적으로 io 실패를 잡아 상태에
     # 기록한다), 응답에도 200이 나온다 — 실패는 status.json의 error로 드러난다.
@@ -258,3 +285,19 @@ def test_upload_failure_is_phi_safe(tmp_path):
     s = body.json()
     assert s["state"] == "error"
     assert fake_patient_name not in (s["error"] or {}).get("message", "")
+    assert fake_patient_name not in (s["input"] or {}).get("filename", "")
+
+
+def test_upload_dotdot_filename_does_not_500(tmp_path):
+    """멀티파트 파일명이 정확히 ".."이면 Path("..").name도 ".."을 그대로
+    돌려준다(빈 문자열이 아니다) — input_dir/".."은 잡 루트 자체(이미 있는
+    디렉터리)라 안전장치 없이 write_bytes하면 500으로 터진다. 항상
+    200 + 기록된 상태(정상 진행 또는 error)여야 한다.
+    """
+    client, _ = _client(tmp_path)
+    r = client.post("/api/jobs", files={"file": ("..", b"whatever bytes")})
+    assert r.status_code == 200
+    jid = r.json()["jobId"]
+
+    s = client.get(f"/api/jobs/{jid}").json()
+    assert s["state"] in ("awaiting_series", "error")
