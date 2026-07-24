@@ -6,6 +6,7 @@ labels·mesh를 순서대로 호출한다.
 
 from seg_and_mesh.jobs.layout import JobPaths, job_paths, new_job_id
 from seg_and_mesh.jobs.meta import build_regions_meta, write_regions_meta
+from seg_and_mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
 from seg_and_mesh.jobs.status import (
     STATES,
     JobStatus,
@@ -27,4 +28,6 @@ __all__ = [
     "write_status",
     "build_regions_meta",
     "write_regions_meta",
+    "ingest_job",
+    "run_segmentation_and_mesh",
 ]

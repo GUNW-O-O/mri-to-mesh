@@ -51,17 +51,27 @@ def build_fastsurfer_command(
     sid: str,
     image: str,
     threads: int = 8,
+    *,
+    host_t1_dir: Path | None = None,
+    host_subject_dir_root: Path | None = None,
 ) -> list[str]:
     """docker run 명령을 만든다.
 
     입력 볼륨의 폴더를 /data(읽기전용), 출력 루트를 /output으로 마운트한다.
     FastSurfer가 /output/<sid>/mri/에 결과를 쓴다.
+
+    host_t1_dir / host_subject_dir_root: `-v` 마운트 원본으로 쓸 호스트 경로.
+        api가 컨테이너 안에서 돌 때 필요하다 — 도커 데몬은 호스트에 있어
+        api 내부 경로를 모른다. None이면 t1_path.parent / subject_dir_root를
+        그대로 쓴다(호스트 직접 실행).
     """
     t1_path = Path(t1_path)
+    mount_t1_dir = Path(host_t1_dir) if host_t1_dir else t1_path.parent
+    mount_sd = Path(host_subject_dir_root) if host_subject_dir_root else Path(subject_dir_root)
     return [
         "docker", "run", "--rm", "--gpus", "all", "--user", "root",
-        "-v", f"{t1_path.parent}:/data:ro",
-        "-v", f"{Path(subject_dir_root)}:/output",
+        "-v", f"{mount_t1_dir}:/data:ro",
+        "-v", f"{mount_sd}:/output",
         image,
         "--t1", f"/data/{t1_path.name}",
         "--sd", "/output",
@@ -92,6 +102,8 @@ def run_fastsurfer(
     sid: str = "case",
     threads: int = 8,
     runner=subprocess.run,
+    host_t1_dir: Path | None = None,
+    host_subject_dir_root: Path | None = None,
 ) -> SegmentResult:
     """FastSurfer를 docker로 돌리고 orig.nii.gz를 만든다.
 
@@ -102,6 +114,12 @@ def run_fastsurfer(
         sid: subject id (폴더명).
         threads: CPU 스레드.
         runner: subprocess.run 대체 지점(테스트에서 목으로 바꾼다, 스펙 §13).
+        host_t1_dir / host_subject_dir_root: `-v` 마운트 원본으로 쓸 호스트
+            경로. api가 컨테이너 안에서 돌 때 필요하다 — 도커 데몬은
+            호스트에 있어 api 내부 경로를 모른다. None이면(호스트 직접
+            실행) t1_path.parent / subject_dir_root를 그대로 쓴다. 파일을
+            실제로 읽고 쓰는 경로(subject_dir_root 자체)는 이 인자와 무관하게
+            항상 api 자기 파일시스템 경로다 — 마운트 인자에만 쓴다.
 
     Returns:
         SegmentResult(subject_dir, orig_path, seg_source_path).
@@ -114,7 +132,10 @@ def run_fastsurfer(
     subject_dir_root = Path(subject_dir_root)
     subject_dir_root.mkdir(parents=True, exist_ok=True)
 
-    cmd = build_fastsurfer_command(t1_path, subject_dir_root, sid, image, threads)
+    cmd = build_fastsurfer_command(
+        t1_path, subject_dir_root, sid, image, threads,
+        host_t1_dir=host_t1_dir, host_subject_dir_root=host_subject_dir_root,
+    )
     proc = runner(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     if proc.returncode != 0:
