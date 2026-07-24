@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -82,6 +83,33 @@ def test_series_selection_runs_pipeline_to_done(tmp_path):
         time.sleep(0.1)
     assert s["state"] == "done", s.get("error")
     assert len(s["variants"]) == 1
+
+
+def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
+    """백그라운드 파이프라인이 예상 못 한 예외로 죽어도 잡이 running에 박히면
+    안 된다 — catch-all이 error로 기록하고, PHI(경로)는 마스킹돼야 한다."""
+    leak = str(tmp_path / "jobs" / "Jane_Q_Placeholder.nii.gz")
+
+    def boom(cmd, **kwargs):
+        # SegmentError가 아닌 예상 밖 예외 — 단계별 except가 안 잡는다.
+        raise RuntimeError(f"unexpected {leak}")
+
+    cfg = AppConfig(
+        jobs_root=tmp_path / "jobs", fastsurfer_image="fs:tag",
+        threads=4, fastsurfer_runner=boom,
+    )
+    client = TestClient(create_app(cfg))
+    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
+    client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+
+    for _ in range(50):
+        s = client.get(f"/api/jobs/{jid}").json()
+        if s["state"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    assert s["state"] == "error"
+    assert "Jane_Q_Placeholder" not in json.dumps(s["error"])
 
 
 def test_index_serves_viewer(tmp_path):

@@ -19,6 +19,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    # starlette 1.3.x의 TestClient은 httpx가 아니라 httpx2를 요구한다
+    # (testclient.py가 `import httpx2 as httpx`). httpx2는 pydantic이 낸
+    # httpx 후속이다. 표준 httpx로 바꾸면 -W error에서 수집 자체가 실패한다.
+    # 런타임에는 안 쓴다 — 서버 코드는 httpx/httpx2를 import하지 않는다.
     "httpx2>=2.9.0",
     "pytest>=8.0",
 ]

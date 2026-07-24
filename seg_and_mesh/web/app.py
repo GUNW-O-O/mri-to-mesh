@@ -153,11 +153,19 @@ def create_app(config: AppConfig) -> FastAPI:
             raise HTTPException(400, "알 수 없는 시리즈 선택")
 
         def work():
-            run_segmentation_and_mesh(
-                paths, Path(sel.niftiPath), config.fastsurfer_image,
-                threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
-                jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
-            )
+            # 파이프라인은 예상한 실패(SegmentError 등)는 단계별로 record_error
+            # 하지만, 예상 못 한 예외(ValueError·KeyError·MemoryError 등)는
+            # 새 나간다. 백그라운드 태스크에는 그걸 받아줄 곳이 없어 잡이
+            # status="running"에 영원히 박힌다 — 업로드 경로처럼 catch-all로
+            # 막는다. record_error가 sanitize_stderr로 PHI를 지운다.
+            try:
+                run_segmentation_and_mesh(
+                    paths, Path(sel.niftiPath), config.fastsurfer_image,
+                    threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
+                    jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
+                )
+            except Exception as exc:  # noqa: BLE001 — 잡을 running에 남기지 않는다
+                record_error(paths, read_status(paths).step or "pipeline", None, str(exc))
 
         bg.add_task(work)
         return {"state": "running"}

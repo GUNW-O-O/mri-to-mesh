@@ -28,14 +28,16 @@ ENV UV_PYTHON_DOWNLOADS=never \
 WORKDIR /app
 
 # 의존성 레이어를 소스와 분리해 소스만 바뀌었을 때 재설치를 피한다.
+# --no-dev: 이건 PHI를 서빙하는 런타임 이미지다 — 테스트 전용 의존성
+# (httpx2·pytest)을 넣지 않는다. 테스트는 로컬에서 uv run pytest로 돈다.
 COPY pyproject.toml uv.lock /app/
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project --no-dev
 
 COPY seg_and_mesh /app/seg_and_mesh
 # 런타임이 읽는 정적 라벨 표 (스펙 §3). 원본 LUT는 복사하지 않는다.
 COPY labels/canonical-v1.tsv /app/labels/canonical-v1.tsv
-COPY tests /app/tests
-RUN uv sync --frozen
+# tests/는 서빙 이미지에 넣지 않는다 — 실행 코드가 아니다.
+RUN uv sync --frozen --no-dev
 
 # 컨테이너 안 잡 루트. compose가 여기에 호스트 OUTPUT_DIR을 바인드 마운트한다.
 ENV SAM_JOBS_ROOT=/work/jobs
