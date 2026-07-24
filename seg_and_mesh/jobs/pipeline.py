@@ -13,6 +13,9 @@ import shutil
 from pathlib import Path
 
 from seg_and_mesh.io import (
+    Dcm2niixError,
+    UnsafeArchiveError,
+    UnsupportedInputError,
     describe_nifti,
     prepare_input,
     rank_series,
@@ -27,8 +30,8 @@ from seg_and_mesh.jobs.status import (
     record_error,
     write_status,
 )
-from seg_and_mesh.labels import load_canonical, remap_segmentation
-from seg_and_mesh.mesh import default_params, generate_variant
+from seg_and_mesh.labels import RemapError, load_canonical, remap_segmentation
+from seg_and_mesh.mesh import GenerateError, default_params, generate_variant
 from seg_and_mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
 
 
@@ -46,26 +49,42 @@ def _series_dict(candidate) -> dict:
 
 
 def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=None) -> JobStatus:
-    """io 단계. 랭킹 후 awaiting_series로 멈춘다(스펙 §6.3 게이트)."""
-    prepared = prepare_input(Path(src), paths.nifti_dir)
+    """io 단계. 랭킹 후 awaiting_series로 멈춘다(스펙 §6.3 게이트).
 
-    if prepared.nifti_file is not None:
-        series = [describe_nifti(prepared.nifti_file, None)]
-    else:
-        series = run_dcm2niix(prepared.dicom_dir, paths.nifti_dir)
-
-    ranked = rank_series(series)
-
+    dcm2niix_runner: 지금은 받기만 하고 안 쓴다 — io.run_dcm2niix에는 주입
+        가능한 runner 인자가 없다(binary 교체만 지원). 나중에 그 인자가
+        생기면 여기서 이어준다. 호출자는 이 값이 지금 dcm2niix 실행을
+        가로채지 않는다는 걸 알아야 한다.
+    """
+    # io 실패도(스펙 §12) record_error를 거쳐야 한다 — 그래야 status.json이
+    # "running"에 멈춰 있지 않고, 원본 경로가 섞인 예외 메시지가
+    # sanitize_stderr 없이 그대로 새지 않는다. 그러려면 실패해도 되돌아갈
+    # status.json이 미리 있어야 하므로, 여기서 먼저 하나 써 둔다.
     status = JobStatus(
         job_id=paths.root.name,
         case_name=paths.root.name,
         created_at=now_iso(),
         updated_at=now_iso(),
-        state="awaiting_series",
+        state="running",
         step="io",
         input={"filename": filename, "bytes": Path(src).stat().st_size},
-        series=[_series_dict(c) for c in ranked],
     )
+    write_status(paths, status)
+
+    try:
+        prepared = prepare_input(Path(src), paths.nifti_dir)
+        if prepared.nifti_file is not None:
+            series = [describe_nifti(prepared.nifti_file, None)]
+        else:
+            series = run_dcm2niix(prepared.dicom_dir, paths.nifti_dir)
+        ranked = rank_series(series)
+    except (Dcm2niixError, UnsupportedInputError, UnsafeArchiveError) as exc:
+        record_error(paths, "io", None, str(exc))
+        return read_status(paths)
+
+    status = read_status(paths)
+    status.state = "awaiting_series"
+    status.series = [_series_dict(c) for c in ranked]
     write_status(paths, status)
     return status
 
@@ -112,36 +131,44 @@ def run_segmentation_and_mesh(
         record_error(paths, "segment", None, str(exc))
         return read_status(paths)
 
-    # orig을 seg/로 옮긴다
-    orig_dst = paths.seg_dir / "orig.nii.gz"
-    shutil.copy2(seg_result.orig_path, orig_dst)
-
-    # --- remap ---
+    # --- remap (orig 복사 포함) ---
     status = read_status(paths)
     status.step = "remap"
     status.engine = {"name": "fastsurfer", "version": _image_version(image), "device": "cuda"}
     write_status(paths, status)
 
     seg_canon = paths.seg_dir / "seg.nii.gz"
-    remap_segmentation(seg_result.seg_source_path, seg_canon, table)
+    try:
+        # orig을 seg/로 옮긴다
+        orig_dst = paths.seg_dir / "orig.nii.gz"
+        shutil.copy2(seg_result.orig_path, orig_dst)
+
+        remap_segmentation(seg_result.seg_source_path, seg_canon, table)
+    except (OSError, RemapError) as exc:
+        record_error(paths, "remap", None, str(exc))
+        return read_status(paths)
 
     # --- mesh (기본 변형 하나) ---
     status = read_status(paths)
     status.step = "mesh"
     write_status(paths, status)
 
-    params = default_params()
-    # variantId를 파라미터 해시로 먼저 계산해(스펙 §7) 바로 올바른 폴더에 생성한다
-    # — 임시 폴더에 썼다가 옮기는 우회가 필요 없다.
-    variant_id = params.variant_id(1)
-    vdir = paths.variant_dir(variant_id)
-    variant = generate_variant(seg_canon, vdir, params, index=1, table=table)
+    try:
+        params = default_params()
+        # variantId를 파라미터 해시로 먼저 계산해(스펙 §7) 바로 올바른 폴더에
+        # 생성한다 — 임시 폴더에 썼다가 옮기는 우회가 필요 없다.
+        variant_id = params.variant_id(1)
+        vdir = paths.variant_dir(variant_id)
+        variant = generate_variant(seg_canon, vdir, params, index=1, table=table)
 
-    meta = build_regions_meta(
-        seg_canon, variant.regions, variant.variant_id,
-        engine=status.engine, seg_file=SEG_SOURCE_FILE,
-    )
-    write_regions_meta(vdir / "regions-meta.json", meta)
+        meta = build_regions_meta(
+            seg_canon, variant.regions, variant.variant_id,
+            engine=status.engine, seg_file=SEG_SOURCE_FILE,
+        )
+        write_regions_meta(vdir / "regions-meta.json", meta)
+    except (GenerateError, OSError) as exc:
+        record_error(paths, "mesh", None, str(exc))
+        return read_status(paths)
 
     # --- 완료 ---
     status = read_status(paths)

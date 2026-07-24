@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import nibabel as nib
 import numpy as np
 
+import seg_and_mesh.jobs.pipeline as pipeline_mod
 from seg_and_mesh.jobs.layout import job_paths
 from seg_and_mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
 from seg_and_mesh.jobs.status import read_status
+from seg_and_mesh.labels import RemapError
+from seg_and_mesh.mesh import GenerateError
 from seg_and_mesh.segment import SEG_SOURCE_FILE
 
 
@@ -139,5 +143,69 @@ def test_segment_failure_records_phi_safe_error(tmp_path):
     )
     assert status.state == "error"
     assert status.error["step"] == "segment"
-    import json
-    assert ".nii.gz" not in json.dumps(status.error) or "<file>" in json.dumps(status.error)
+    # 느슨한 OR가 아니라, 실제로 넣은 원본 경로 문자열이 그대로 안 남았는지
+    # 직접 확인한다 — sanitize_stderr를 우회해도 "<file>"이 다른 곳에서
+    # 우연히 나타나면 통과하는 약한 단언을 피한다.
+    assert selected not in json.dumps(status.error)
+
+
+def test_ingest_failure_records_phi_safe_error(tmp_path):
+    """io 단계 실패(판별 불가)도 record_error를 거쳐 PHI-안전하게 남는다."""
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    src = tmp_path / "upload" / "Fake_Patient_Name_scan.dat"
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"not a real medical image - just garbage bytes for the test")
+
+    status = ingest_job(p, src, "scan.dat")
+
+    assert status.state == "error"
+    assert status.error["step"] == "io"
+    assert str(src) not in json.dumps(status.error)
+
+
+def test_remap_failure_records_phi_safe_error(tmp_path, monkeypatch):
+    """remap 단계 실패(RemapError)도 record_error를 거쳐 PHI-안전하게 남는다."""
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    src = _t1_upload(tmp_path)
+    ingest_job(p, src, "input.nii.gz")
+    selected = read_status(p).series[0]["niftiPath"]
+
+    fake_path = str(tmp_path / "up" / "Fake_Patient_Name_seg.mgz")
+
+    def failing_remap(seg_in, seg_out, table=None):
+        raise RemapError(f"세그멘테이션을 읽지 못했다: {fake_path}")
+
+    monkeypatch.setattr(pipeline_mod, "remap_segmentation", failing_remap)
+
+    status = run_segmentation_and_mesh(
+        p, Path(selected), image="fs:tag",
+        fastsurfer_runner=_fastsurfer_mock(p.fs_dir, "case"),
+    )
+
+    assert status.state == "error"
+    assert status.error["step"] == "remap"
+    assert fake_path not in json.dumps(status.error)
+
+
+def test_mesh_failure_records_phi_safe_error(tmp_path, monkeypatch):
+    """mesh 단계 실패(GenerateError)도 record_error를 거쳐 PHI-안전하게 남는다."""
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    src = _t1_upload(tmp_path)
+    ingest_job(p, src, "input.nii.gz")
+    selected = read_status(p).series[0]["niftiPath"]
+
+    fake_path = str(tmp_path / "seg" / "Fake_Patient_Name_seg.nii.gz")
+
+    def failing_generate(seg_path, out_dir, params, index=1, table=None):
+        raise GenerateError(f"세그를 읽지 못했다: {fake_path}")
+
+    monkeypatch.setattr(pipeline_mod, "generate_variant", failing_generate)
+
+    status = run_segmentation_and_mesh(
+        p, Path(selected), image="fs:tag",
+        fastsurfer_runner=_fastsurfer_mock(p.fs_dir, "case"),
+    )
+
+    assert status.state == "error"
+    assert status.error["step"] == "mesh"
+    assert fake_path not in json.dumps(status.error)
