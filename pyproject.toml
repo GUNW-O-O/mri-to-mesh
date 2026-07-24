@@ -1,0 +1,40 @@
+[project]
+name = "seg-and-mesh"
+version = "0.1.0"
+description = "뇌 T1 MRI에서 영역별 세그멘테이션 볼륨과 3D 메시를 산출하는 로컬 도구"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "pydicom>=3.0,<4",
+    "nibabel>=5.2,<6",
+    "numpy>=2.4.6,<3",
+    "pyvista>=0.44",
+    "scikit-image>=0.24",
+    "trimesh>=4.4",
+    "scipy>=1.13",
+    "PyMCubes>=0.1.4",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["seg_and_mesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -q를 여기 두면 명령줄의 -v와 상쇄돼 점 출력이 나온다. 실제로 리뷰에서 두 번
+# "출력을 위조했다"는 오진을 불렀다. 필요하면 호출할 때 -q를 붙인다.
+addopts = ""
+markers = [
+    "realdata: 실제 MRI 데이터가 있을 때만 실행한다 (환경 변수 SAM_TEST_DATA_DIR)",
+    "dcm2niix: dcm2niix 바이너리가 있을 때만 실행한다 (PATH 또는 DCM2NIIX_BIN)",
+]

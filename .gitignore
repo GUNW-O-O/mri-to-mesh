@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# 환경 설정 (스펙 §11 — 저장소에는 .env.example만 둔다)
+.env
+
+# 작업 산출물
+/work/
+/out/
+
+# FastSurfer 이미지에서 추출한 원본 LUT — 커밋 대상은 생성물 canonical-v1.tsv뿐 (스펙 §3)
+/labels/FreeSurferColorLUT.txt
+/labels/FastSurfer_ColorLUT.tsv
+
+# 외부 바이너리
+/vendor/
+
+# 실제 MRI 테스트 데이터 (환자 데이터 — 공개 저장소에 절대 올리지 않는다)
+/test-asset/
