@@ -119,6 +119,16 @@ def run_segmentation_and_mesh(
     status = read_status(paths)
     status.state = "running"
     status.selected_series = {"niftiPath": str(selected_nifti)}
+    # 서빙(_strip_selected)이 series와 대조해 index를 찾지만, 선택 시점의 얕은
+    # 메타를 같이 남겨 두면 series가 나중에 비어도 표시가 안정적이다.
+    for c in status.series:
+        if c.get("niftiPath") == str(selected_nifti):
+            status.selected_series.update({
+                "description": c.get("description"),
+                "slices": c.get("slices"),
+                "voxelSizeMm": c.get("voxelSizeMm"),
+            })
+            break
     status.step = "segment"
     write_status(paths, status)
 

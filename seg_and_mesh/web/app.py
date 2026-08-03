@@ -45,7 +45,43 @@ def _status_json(paths) -> dict:
     d = read_status(paths).to_json_dict()
     if d.get("input") and d["input"].get("filename"):
         d["input"] = {**d["input"], "filename": "<file>"}
+    raw_series = d.get("series") or []
+    d["series"] = _strip_series(raw_series)
+    d["selectedSeries"] = _strip_selected(d.get("selectedSeries"), raw_series)
     return d
+
+
+def _strip_series(series: list[dict]) -> list[dict]:
+    """서빙용 series — niftiPath를 벗기고 배열 위치를 index로 노출(스펙 §12)."""
+    out = []
+    for i, c in enumerate(series):
+        out.append({
+            "index": i,
+            "description": c.get("description"),
+            "slices": c.get("slices"),
+            "voxelSizeMm": c.get("voxelSizeMm"),
+            "acquisitionType": c.get("acquisitionType"),
+            "score": c.get("score"),
+            "reasons": c.get("reasons"),
+        })
+    return out
+
+
+def _strip_selected(sel: dict | None, series: list[dict]) -> dict | None:
+    """서빙용 selectedSeries — 경로 대신 index + 얕은 메타(스펙 §9.1)."""
+    if not sel:
+        return None
+    idx = None
+    for i, c in enumerate(series):
+        if c.get("niftiPath") == sel.get("niftiPath"):
+            idx = i
+            break
+    return {
+        "index": idx,
+        "description": sel.get("description") or (series[idx].get("description") if idx is not None else None),
+        "slices": sel.get("slices") or (series[idx].get("slices") if idx is not None else None),
+        "voxelSizeMm": sel.get("voxelSizeMm") or (series[idx].get("voxelSizeMm") if idx is not None else None),
+    }
 
 
 def _confined_child(base: Path, name: str, label: str) -> Path:
@@ -79,7 +115,7 @@ class AppConfig:
 
 
 class SeriesSelection(BaseModel):
-    niftiPath: str
+    seriesIndex: int
 
 
 def _checked_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
@@ -174,13 +210,14 @@ def create_app(config: AppConfig) -> FastAPI:
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
 
-        # 클라이언트가 보낸 niftiPath를 그대로 열면 경로 조작(path traversal /
-        # arbitrary read) 위험이다 — 이 잡이 ingest_job에서 랭킹해 status.json에
-        # 이미 적어둔 후보 중 하나인지 반드시 확인한다.
+        # 클라가 index를 보내고, 서버는 자기 신뢰 데이터(status.series)에서
+        # niftiPath를 꺼낸다 — 클라가 경로 자체를 보낼 필요가 없어져
+        # 경로조작(path traversal / arbitrary read) 표면이 사라진다.
         job_status = read_status(paths)
-        candidates = {c["niftiPath"] for c in job_status.series}
-        if sel.niftiPath not in candidates:
-            raise HTTPException(400, "알 수 없는 시리즈 선택")
+        series = job_status.series
+        if not (0 <= sel.seriesIndex < len(series)):
+            raise HTTPException(400, "잘못된 시리즈 index")
+        selected_nifti = series[sel.seriesIndex]["niftiPath"]
 
         def work():
             # 파이프라인은 예상한 실패(SegmentError 등)는 단계별로 record_error
@@ -190,7 +227,7 @@ def create_app(config: AppConfig) -> FastAPI:
             # 막는다. record_error가 sanitize_stderr로 PHI를 지운다.
             try:
                 run_segmentation_and_mesh(
-                    paths, Path(sel.niftiPath), config.fastsurfer_image,
+                    paths, Path(selected_nifti), config.fastsurfer_image,
                     threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
                     jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
                 )

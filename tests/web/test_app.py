@@ -107,9 +107,7 @@ def test_series_selection_runs_pipeline_to_done(tmp_path):
     client, holder = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
     holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
-
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    r = client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    r = client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
     assert r.status_code == 200
 
     # 백그라운드 완료 대기 (테스트는 동기 실행하거나 폴링)
@@ -120,6 +118,28 @@ def test_series_selection_runs_pipeline_to_done(tmp_path):
         time.sleep(0.1)
     assert s["state"] == "done", s.get("error")
     assert len(s["variants"]) == 1
+
+
+def test_served_status_has_no_niftipath(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = client.get(f"/api/jobs/{jid}").json()
+    assert s["state"] == "awaiting_series"
+    assert "niftiPath" not in json.dumps(s)      # 어디에도 경로 없음
+    assert s["series"][0]["index"] == 0          # index로 식별
+    assert "description" in s["series"][0]
+
+
+def test_selected_series_served_without_path(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
+    s = client.get(f"/api/jobs/{jid}").json()
+    sel = s["selectedSeries"]
+    assert sel is not None
+    assert set(sel) <= {"index", "description", "slices", "voxelSizeMm"}
+    assert "niftiPath" not in json.dumps(sel)
 
 
 def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
@@ -137,8 +157,7 @@ def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
     )
     client = TestClient(create_app(cfg))
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
 
     for _ in range(50):
         s = client.get(f"/api/jobs/{jid}").json()
@@ -231,26 +250,22 @@ def test_get_unknown_job_is_404(tmp_path):
 
 def test_series_selection_unknown_job_is_404(tmp_path):
     client, _ = _client(tmp_path)
-    r = client.post("/api/jobs/no-such-job/series", json={"niftiPath": "whatever"})
+    r = client.post("/api/jobs/no-such-job/series", json={"seriesIndex": 0})
     assert r.status_code == 404
 
 
-def test_series_selection_rejects_path_not_in_candidates(tmp_path):
-    """클라이언트가 이 잡의 랭킹 후보에 없는 임의 경로를 보내면 거부한다.
+def test_series_selection_by_index_rejects_out_of_range(tmp_path):
+    """범위 밖 index를 보내면 거부한다.
 
-    niftiPath는 이 잡의 status.series에 있는 값이어야만 한다 — 그렇지
-    않으면 서버가 클라이언트가 지정한 임의 파일을 그대로 열어 FastSurfer에
-    넘기는 경로 조작(path traversal / arbitrary read) 위험이 된다.
+    seriesIndex는 서버가 자기 status.series 배열 길이 안에서만 받아들인다
+    — 그 이상은 서버가 자기 신뢰 데이터를 벗어난 index로 임의 접근하는
+    셈이라 400으로 막는다(경로를 클라가 안 보내므로 경로 조작 표면 자체가
+    없어졌다는 점이 브리프의 핵심 변경이다).
     """
     client, _ = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
 
-    other_job_dir = tmp_path / "jobs" / "other-job" / "nifti"
-    other_job_dir.mkdir(parents=True)
-    sneaky = other_job_dir / "secret.nii.gz"
-    sneaky.write_bytes(b"not a real nifti")
-
-    r = client.post(f"/api/jobs/{jid}/series", json={"niftiPath": str(sneaky)})
+    r = client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 99})
     assert r.status_code == 400
     # 거부됐으니 세그멘테이션 산출물도 없어야 한다
     assert not (tmp_path / "jobs" / jid / "seg" / "seg.nii.gz").exists()
@@ -261,8 +276,7 @@ def test_glb_and_meta_are_served_after_done(tmp_path):
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
     holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
 
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
 
     s = None
     for _ in range(50):
@@ -306,7 +320,7 @@ def test_dotted_job_id_is_not_falsely_rejected(tmp_path):
     r = client.get("/api/jobs/a..b")
     assert r.status_code == 404
 
-    r = client.post("/api/jobs/a..b/series", json={"niftiPath": "x"})
+    r = client.post("/api/jobs/a..b/series", json={"seriesIndex": 0})
     assert r.status_code == 404
 
     r = client.get("/api/jobs/foo/variants/a..b/regions.glb")
@@ -330,7 +344,7 @@ def test_windows_drive_relative_job_id_is_rejected(tmp_path):
         r = client.get(f"/api/jobs/{bad}")
         assert r.status_code == 400, f"{bad!r}: {r.status_code}"
 
-        r = client.post(f"/api/jobs/{bad}/series", json={"niftiPath": "x"})
+        r = client.post(f"/api/jobs/{bad}/series", json={"seriesIndex": 0})
         assert r.status_code == 400, f"{bad!r}: {r.status_code}"
 
         r = client.get(f"/api/jobs/foo/variants/{bad}/regions.glb")
