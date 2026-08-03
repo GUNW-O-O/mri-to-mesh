@@ -66,11 +66,6 @@ def test_upload_creates_job_awaiting_series(tmp_path):
     assert len(s["series"]) == 1
 
 
-def _sanitize_name(raw):
-    # 테스트 편의용 기대값 헬퍼 — 구현과 무관하게 규칙만 표현
-    return raw
-
-
 def test_upload_accepts_folder_of_many_files_flattened(tmp_path):
     client, _ = _client(tmp_path)
     # DICOM 폴더 흉내: 매직바이트가 DICOM인 파일 3개(파일명·상대경로 제각각)
@@ -396,10 +391,11 @@ def test_upload_failure_is_phi_safe(tmp_path):
 
 
 def test_upload_dotdot_filename_does_not_500(tmp_path):
-    """멀티파트 파일명이 정확히 ".."이면 Path("..").name도 ".."을 그대로
-    돌려준다(빈 문자열이 아니다) — input_dir/".."은 잡 루트 자체(이미 있는
-    디렉터리)라 안전장치 없이 write_bytes하면 500으로 터진다. 항상
-    200 + 기록된 상태(정상 진행 또는 error)여야 한다.
+    """평탄화 회귀 점검: 클라이언트 파일명은 이제 통째로 버려지고 번호로만
+    저장되므로(입력 파일명은 서버 어디에도 안 쓰인다) ".."을 파일명으로
+    보내도 그 값 자체는 무해하다. 그래도 업로드는 항상 200 +
+    기록된 상태(정상 진행 또는 error)여야 하고, 절대 맨 500으로 터지면
+    안 된다는 걸 지킨다.
     """
     client, _ = _client(tmp_path)
     r = client.post("/api/jobs", files={"files": ("..", b"whatever bytes")})

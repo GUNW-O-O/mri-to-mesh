@@ -60,9 +60,18 @@ def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=Non
     # "running"에 멈춰 있지 않고, 원본 경로가 섞인 예외 메시지가
     # sanitize_stderr 없이 그대로 새지 않는다. 그러려면 실패해도 되돌아갈
     # status.json이 미리 있어야 하므로, 여기서 먼저 하나 써 둔다.
+    #
+    # case_name: 호출자(web/app.py의 upload)가 이미 사용자 라벨을 담아
+    # status.json을 써 둔 채로 여기 들어올 수 있다 — 그 라벨을 모르는
+    # job_id로 덮어쓰면 안 되므로, 디스크에 이미 있으면 그대로 이어받는다.
+    # 없으면(직접 ingest_job을 부르는 테스트 등) job_id로 대체한다.
+    if paths.status_file.is_file():
+        case_name = read_status(paths).case_name
+    else:
+        case_name = paths.root.name
     status = JobStatus(
         job_id=paths.root.name,
-        case_name=paths.root.name,
+        case_name=case_name,
         created_at=now_iso(),
         updated_at=now_iso(),
         state="running",

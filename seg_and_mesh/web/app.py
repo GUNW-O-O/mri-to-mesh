@@ -107,37 +107,32 @@ def create_app(config: AppConfig) -> FastAPI:
         paths = job_paths(config.jobs_root, job_id).create()
         case_name = _clean_name(name, job_id)
 
-        # 클라가 준 파일명·상대경로는 통째 버리고 번호로 평탄 저장한다. NAS
-        # 긴 경로·하위폴더 동명 충돌·파일명 PHI·윈도우 MAX_PATH를 한 번에
-        # 없앤다. DICOM 순서는 dcm2niix가 태그로 잡으므로 이름은 무의미하다.
-        saved = []
-        for i, f in enumerate(files, start=1):
-            dst = paths.input_dir / f"{i:04d}"
-            dst.write_bytes(await f.read())
-            saved.append(dst)
-
-        # record_error가 되돌아갈 최소 status.json을 먼저 써 둔다.
+        # record_error가 되돌아갈 최소 status.json을 파일 쓰기보다 먼저 써
+        # 둔다 — 디스크 풀·권한 오류·클라이언트 연결 끊김으로 파일 쓰기 자체가
+        # 터져도(아래 for 루프), status.json 없이 맨 500이 나가거나 잡
+        # 디렉터리가 기록 하나 없이 버려지는 일이 없어야 한다.
         write_status(paths, JobStatus(
             job_id=job_id, case_name=case_name, created_at=now_iso(), updated_at=now_iso(),
             state="running", step="io", input={"filename": "<file>", "bytes": 0},
         ))
 
-        # 입력 판별: 파일 1개면 그 파일로(zip/nifti 자동판별), 여러 개면
-        # input_dir 전체를 DICOM 폴더로 넘긴다(prepare_input이 디렉터리 모드).
-        src = saved[0] if len(saved) == 1 else paths.input_dir
         try:
+            # 클라가 준 파일명·상대경로는 통째 버리고 번호로 평탄 저장한다. NAS
+            # 긴 경로·하위폴더 동명 충돌·파일명 PHI·윈도우 MAX_PATH를 한 번에
+            # 없앤다. DICOM 순서는 dcm2niix가 태그로 잡으므로 이름은 무의미하다.
+            saved = []
+            for i, f in enumerate(files, start=1):
+                dst = paths.input_dir / f"{i:04d}"
+                dst.write_bytes(await f.read())
+                saved.append(dst)
+
+            # 입력 판별: 파일 1개면 그 파일로(zip/nifti 자동판별), 여러 개면
+            # input_dir 전체를 DICOM 폴더로 넘긴다(prepare_input이 디렉터리
+            # 모드).
+            src = saved[0] if len(saved) == 1 else paths.input_dir
             ingest_job(paths, src, "<file>")
         except Exception as exc:  # noqa: BLE001
             record_error(paths, "io", None, str(exc))
-        else:
-            # ingest_job의 성공 경로(pipeline.py)는 status.json을 통째로 새로
-            # 만들며 case_name을 job_id로 되돌린다 — 파이프라인은 사용자
-            # 라벨을 모른다. 여기서 위에서 정한 case_name을 다시 덮어써
-            # 살린다. 실패 경로(record_error)는 기존 status를 읽어 일부
-            # 필드만 바꾸므로 case_name을 이미 보존한다 — 건드릴 필요 없다.
-            st = read_status(paths)
-            st.case_name = case_name
-            write_status(paths, st)
         return {"jobId": job_id}
 
     @app.get("/api/jobs")
