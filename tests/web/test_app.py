@@ -133,6 +133,29 @@ def test_static_mount_blocks_traversal(tmp_path):
     assert client.get("/static/../app.py").status_code == 404
 
 
+def test_list_jobs_returns_summaries_without_phi(tmp_path):
+    client, _ = _client(tmp_path)
+    # 잡 두 개 업로드(둘 다 awaiting_series에서 멈춤)
+    for _ in range(2):
+        client.post("/api/jobs", files={"file": ("scan.nii.gz", _nifti_bytes())})
+
+    rows = client.get("/api/jobs").json()
+    assert len(rows) == 2
+    keys = set(rows[0])
+    assert keys == {"jobId", "name", "state", "step", "createdAt", "variantCount"}
+    # PHI 부재: 목록 응답 어디에도 파일명·경로·series 필드가 없다.
+    blob = json.dumps(rows)
+    assert "niftiPath" not in blob
+    assert "scan.nii.gz" not in blob
+    # Check that 'series' is not present as a field key in any row
+    assert not any("series" in row for row in rows)
+
+
+def test_list_jobs_empty(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.get("/api/jobs").json() == []
+
+
 # --- 아래는 브리프의 3개 테스트를 넘어서는 추가 커버리지다 ---
 # (§6.3 게이트가 HTTP 경계에서도 지켜지는지, 경로 검증, PHI 안전성, 404들)
 

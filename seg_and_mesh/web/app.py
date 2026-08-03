@@ -131,6 +131,32 @@ def create_app(config: AppConfig) -> FastAPI:
             record_error(paths, "io", None, str(exc))
         return {"jobId": job_id}
 
+    @app.get("/api/jobs")
+    def list_jobs() -> list[dict]:
+        rows = []
+        for child in config.jobs_root.iterdir():
+            if not child.is_dir():
+                continue
+            paths = JobPaths(root=child)
+            if not paths.status_file.is_file():
+                continue
+            try:
+                st = read_status(paths)
+            except (OSError, ValueError, KeyError):
+                # 반쯤 쓰다 만 status.json은 목록에서 조용히 건너뛴다 —
+                # 목록 하나 때문에 500을 내지 않는다.
+                continue
+            rows.append({
+                "jobId": st.job_id,
+                "name": st.case_name,
+                "state": st.state,
+                "step": st.step,
+                "createdAt": st.created_at,
+                "variantCount": len(st.variants),
+            })
+        rows.sort(key=lambda r: r["createdAt"], reverse=True)
+        return rows
+
     @app.get("/api/jobs/{job_id}")
     def status(job_id: str) -> dict:
         paths = _checked_job_paths(config.jobs_root, job_id)
