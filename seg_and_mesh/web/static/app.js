@@ -5,17 +5,34 @@ const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
 let pollTimer = null;
 
+// innerHTML에 꽂히는 사용자·메타데이터 문자열은 전부 이걸 거친다. 우리가 직접
+// 만든 숫자/고정 라벨은 대상 아님.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 // ---------- 사이드바 ----------
 async function refreshJobs() {
-  const rows = await api.listJobs();
   const el = document.getElementById('joblist');
+  let rows;
+  try {
+    rows = await api.listJobs();
+  } catch (err) {
+    console.error('[refreshJobs]', err);
+    // #joblist는 .panel 밖이라 '.sub' 스코프가 안 먹는다 — 인라인으로.
+    el.innerHTML = '<div style="color:#888;font-size:12px;padding:8px">목록을 불러오지 못했습니다 — 재시도 중…</div>';
+    scheduleList(); // 계속 재시도 — 죽은 스피너로 안 남기고
+    return;
+  }
   el.innerHTML = '';
   for (const r of rows) {
     const div = document.createElement('div');
     div.className = 'job' + (r.jobId === selectedJob ? ' active' : '');
     div.onclick = () => selectJob(r.jobId);
     div.innerHTML =
-      `<div class="name">${r.name}</div>` +
+      `<div class="name">${esc(r.name)}</div>` +
       `<div class="row"><span class="chip ${chipClass(r)}">${chipText(r)}</span></div>`;
     el.append(div);
   }
@@ -37,7 +54,19 @@ async function selectJob(jobId) {
 }
 
 async function renderStage() {
-  const s = await api.getStatus(selectedJob);
+  let s;
+  try {
+    s = await api.getStatus(selectedJob);
+  } catch (err) {
+    console.error('[renderStage]', err);
+    const el = document.getElementById('stage-progress');
+    // 진행 패널이 떠 있을 때만 알리고, 계속 재시도해서 스피너가 죽지 않게 한다.
+    if (el && el.style.display !== 'none' && !el.querySelector('.poll-err')) {
+      el.insertAdjacentHTML('beforeend', '<div class="sub poll-err">상태 조회 실패 — 재시도 중…</div>');
+    }
+    poll();
+    return;
+  }
   showStage(s.state);
   if (s.state === 'awaiting_series') renderSelect(s);
   else if (s.state === 'running') { renderProgress(s); poll(); }
@@ -64,9 +93,9 @@ function renderSelect(s) {
     d.className = 'series' + (i===0?' sel':'');
     d.innerHTML =
       `<input type="radio" name="s" ${i===0?'checked':''}>` +
-      `<div class="meta"><div class="title">${c.description ?? '(설명 없음)'}</div>` +
-      `<div class="facts">${c.slices}슬 · ${(c.voxelSizeMm||[]).join('×')}mm · ${c.acquisitionType??''}</div>` +
-      `<div class="reasons">${(c.reasons||[]).join(' · ')}</div></div>` +
+      `<div class="meta"><div class="title">${c.description != null ? esc(c.description) : '(설명 없음)'}</div>` +
+      `<div class="facts">${c.slices}슬 · ${(c.voxelSizeMm||[]).join('×')}mm · ${esc(c.acquisitionType)}</div>` +
+      `<div class="reasons">${(c.reasons||[]).map(esc).join(' · ')}</div></div>` +
       `<span class="rank">${i+1}순위 · ${c.score}</span>`;
     d.onclick = () => { el.querySelectorAll('.series').forEach(x=>x.classList.remove('sel'));
                         d.classList.add('sel'); d.querySelector('input').checked = true;
@@ -97,7 +126,7 @@ function renderProgress(s) {
 // ---------- 에러 ----------
 function renderError(s) {
   const el = document.getElementById('stage-error');
-  el.innerHTML = `<h2>실패 · ${s.step}</h2><div class="sub">${(s.error&&s.error.message)||''}</div>`;
+  el.innerHTML = `<h2>실패 · ${esc(s.step)}</h2><div class="sub">${esc((s.error&&s.error.message)||'')}</div>`;
 }
 
 // ---------- 뷰어 ----------
@@ -117,11 +146,30 @@ setupDrop(document.getElementById('drop'), fs => { picked = fs; });
 document.getElementById('upload-go').onclick = async () => {
   if (!picked.length) return;
   const name = document.getElementById('name').value.trim();
-  const { jobId } = await api.upload(picked, name);
+  let jobId;
+  try {
+    ({ jobId } = await api.upload(picked, name));
+  } catch (err) {
+    console.error('[upload]', err);
+    showModalError(err.message || '업로드 실패');
+    return; // 모달은 열어둔 채로 — 재시도할 수 있게
+  }
   overlay.classList.remove('on'); picked = []; document.getElementById('name').value = '';
   document.getElementById('file-input').value = '';
   await refreshJobs(); selectJob(jobId);
 };
+function showModalError(msg) {
+  const modal = document.getElementById('modal');
+  let el = modal.querySelector('.modal-err');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'modal-err';
+    // '.sub'는 .panel 안에서만 먹는 스코프라 여기선 안 걸린다 — 인라인으로.
+    el.style.cssText = 'color:#f87171;font-size:12px;margin-top:8px;';
+    modal.insertBefore(el, modal.querySelector('.modal-actions'));
+  }
+  el.textContent = msg; // textContent라 이스케이프 불필요
+}
 
 // 폴더 드롭: DataTransfer 항목을 재귀로 훑어 파일만 모은다.
 function setupDrop(el, cb) {
@@ -139,7 +187,17 @@ function walkEntry(entry, out) {
     if (entry.isFile) entry.file(f => { out.push(f); resolve(); });
     else if (entry.isDirectory) {
       const rd = entry.createReader();
-      rd.readEntries(async es => { for (const e of es) await walkEntry(e, out); resolve(); });
+      // Chromium은 한 번 호출에 ~100개까지만 준다 — 빈 배열이 올 때까지 반복 호출해야
+      // 큰 DICOM 폴더(슬라이스 수백 장)를 안 흘린다.
+      const readBatch = () => new Promise(res => rd.readEntries(res, () => res([])));
+      (async () => {
+        for (;;) {
+          const es = await readBatch();
+          if (!es.length) break;
+          for (const e of es) await walkEntry(e, out);
+        }
+        resolve();
+      })();
     } else resolve();
   });
 }
