@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { glbUrl, metaUrl } from './api.js';
 
 export class Viewer {
   constructor(canvas) {
@@ -24,6 +25,7 @@ export class Viewer {
     this.root = null;          // 현재 GLB 그룹
     this.meta = null;          // regions-meta.json
     this.matById = new Map();
+    this.loadGeneration = 0;
 
     // group·side 둘 다 토글한다(스펙 §8). 각 영역의 최종 visible은 두 토글의
     // AND다 — 한쪽만 갱신하면서 m.visible을 직접 덮어쓰면 다른 쪽 상태를
@@ -53,8 +55,14 @@ export class Viewer {
   }
 
   clear() {
+    this.loadGeneration += 1;
     if (this.root) { this.scene.remove(this.root); this.root = null; }
+    this.meta = null;
     this.matById.clear();
+    const groups = document.getElementById('groups');
+    const metrics = document.getElementById('metrics');
+    if (groups) groups.innerHTML = '';
+    if (metrics) metrics.textContent = '';
   }
 
   _frame(group) {
@@ -93,16 +101,27 @@ export class Viewer {
 
   async showVariant(jobId, variantId) {
     this.clear();
-    const base = `/api/jobs/${jobId}/variants/${variantId}`;
-    this.meta = await (await fetch(`${base}/regions-meta.json`)).json();
-    const buf = await (await fetch(`${base}/regions.glb`)).arrayBuffer();
-    const gltf = await new GLTFLoader().parseAsync(buf, '');
-    this.root = gltf.scene;
-    this.scene.add(this.root);
-    this._applyColors(document.getElementById('transparent')?.checked ?? false);
-    this._frame(this.root);
-    this._renderMetrics();
-    this._renderGroups();
+    const generation = this.loadGeneration;
+    try {
+      const metaRes = await fetch(metaUrl(jobId, variantId));
+      if (!metaRes.ok) throw new Error(`${metaRes.status} meta 로드 실패`);
+      const meta = await metaRes.json();
+      const glbRes = await fetch(glbUrl(jobId, variantId));
+      if (!glbRes.ok) throw new Error(`${glbRes.status} GLB 로드 실패`);
+      const buf = await glbRes.arrayBuffer();
+      const gltf = await new GLTFLoader().parseAsync(buf, '');
+      if (generation !== this.loadGeneration) return;
+      this.meta = meta;
+      this.root = gltf.scene;
+      this.scene.add(this.root);
+      this._applyColors(document.getElementById('transparent')?.checked ?? false);
+      this._frame(this.root);
+      this._renderMetrics();
+      this._renderGroups();
+    } catch (err) {
+      if (generation !== this.loadGeneration) return;
+      throw err;
+    }
   }
 
   _renderMetrics() {

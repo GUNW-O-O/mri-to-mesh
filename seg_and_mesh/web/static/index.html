@@ -87,9 +87,12 @@
   .drop { border: 2px dashed #3a3a3a; border-radius: 10px; padding: 34px; text-align: center;
           color: #888; font-size: 13px; }
   .drop b { color: #ccc; }
+  .drop:focus-visible { outline: 2px solid #2d6cdf; outline-offset: 3px; }
+  .drop-status { color: #38bdf8; font-size: 11px; margin-top: 10px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
   .ghost { background: transparent; color: #aaa; border: 1px solid #333; border-radius: 8px;
            padding: 8px 14px; cursor: pointer; }
+  button:disabled { cursor: wait; opacity: .55; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -130,11 +133,14 @@
   <div id="modal">
     <h3>새 작업 — MRI 업로드</h3>
     <input id="name" type="text" placeholder="작업 이름(선택)">
-    <div id="drop" class="drop">
-      <b>DICOM 폴더·zip / NIfTI</b> 를 여기로 끌어놓기<br>
-      <span style="font-size:11px">또는 클릭해서 선택</span>
+    <div id="drop" class="drop" role="button" tabindex="0"
+         aria-describedby="drop-help drop-status">
+      <b>DICOM 폴더 / ZIP / NIfTI</b> 드롭<br>
+      <span id="drop-help" style="font-size:11px">클릭: ZIP·NIfTI 파일 선택 · 폴더: 드롭</span>
+      <div id="drop-status" class="drop-status" role="status" aria-live="polite">선택된 입력 없음</div>
     </div>
-    <input id="file-input" type="file" webkitdirectory multiple style="display:none">
+    <input id="file-input" type="file" accept=".zip,.nii,.gz,application/zip,application/gzip"
+           style="display:none">
     <div class="modal-actions">
       <button id="upload-cancel" class="ghost">취소</button>
       <button id="upload-go" class="primary" style="margin-top:0">업로드</button>

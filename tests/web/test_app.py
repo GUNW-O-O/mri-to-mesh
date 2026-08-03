@@ -271,6 +271,15 @@ def test_series_selection_by_index_rejects_out_of_range(tmp_path):
     assert not (tmp_path / "jobs" / jid / "seg" / "seg.nii.gz").exists()
 
 
+def test_series_selection_rejects_repeat_after_started(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+
+    assert client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0}).status_code == 200
+    assert client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0}).status_code == 409
+
+
 def test_glb_and_meta_are_served_after_done(tmp_path):
     client, holder = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]

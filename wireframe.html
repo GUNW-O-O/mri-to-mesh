@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>seg-and-mesh — 워크벤치 와이어프레임</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
+         height: 100vh; display: flex; overflow: hidden; }
+
+  /* ---------- 사이드바 ---------- */
+  #sidebar { width: 280px; flex: 0 0 280px; background: #181818; border-right: 1px solid #2a2a2a;
+             display: flex; flex-direction: column; }
+  #sidebar header { padding: 14px 16px; border-bottom: 1px solid #2a2a2a;
+                    display: flex; align-items: center; justify-content: space-between; }
+  #sidebar header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  .new-btn { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
+             padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  #joblist { overflow-y: auto; flex: 1; padding: 8px; }
+  .job { padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer;
+         border: 1px solid transparent; }
+  .job:hover { background: #202020; }
+  .job.active { background: #22314f; border-color: #2d6cdf; }
+  .job .name { font-size: 13px; margin-bottom: 6px; font-family: monospace; }
+  .job .row { display: flex; align-items: center; gap: 8px; }
+  .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .chip.done   { background: #14361f; color: #4ade80; }
+  .chip.run    { background: #3a2e0e; color: #fbbf24; }
+  .chip.await  { background: #0e2a3a; color: #38bdf8; }
+  .chip.err    { background: #3a1414; color: #f87171; }
+  .bar { height: 4px; background: #2a2a2a; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: #fbbf24; }
+
+  /* ---------- 메인 ---------- */
+  #main { flex: 1; position: relative; display: flex; flex-direction: column; }
+  .stage-note { position: fixed; bottom: 8px; right: 12px; font-size: 10px; color: #555; }
+
+  /* 상태 패널 공통 */
+  .panel { margin: auto; width: 560px; max-width: 90%; }
+  .panel h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .panel .sub { color: #888; font-size: 12px; margin-bottom: 18px; }
+
+  /* 시리즈 선택 */
+  .series { border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+            display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+  .series:hover { border-color: #3a3a3a; }
+  .series.sel { border-color: #2d6cdf; background: #16233c; }
+  .series input { margin-top: 3px; }
+  .series .meta { flex: 1; }
+  .series .title { font-size: 14px; margin-bottom: 4px; }
+  .series .facts { font-size: 12px; color: #9aa; font-family: monospace; }
+  .series .reasons { font-size: 11px; color: #6b8; margin-top: 6px; }
+  .series .rank { font-size: 10px; color: #fbbf24; border: 1px solid #3a2e0e; border-radius: 6px;
+                  padding: 2px 6px; align-self: flex-start; }
+  .primary { background: #2d6cdf; color: #fff; border: 0; border-radius: 8px;
+             padding: 10px 18px; font-size: 13px; cursor: pointer; margin-top: 8px; }
+
+  /* 진행률 */
+  .steps { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+  .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
+         display: grid; place-items: center; font-size: 10px; }
+  .dot.ok  { background: #14361f; color: #4ade80; }
+  .dot.now { background: #3a2e0e; color: #fbbf24; }
+  .dot.wait{ background: #222; color: #555; }
+  .bigbar { height: 6px; background: #2a2a2a; border-radius: 3px; margin-top: 24px; overflow: hidden; }
+  .bigbar > i { display: block; height: 100%; width: 55%; background: #fbbf24; }
+
+  /* 뷰어 목업 */
+  #viewer { flex: 1; background: radial-gradient(circle at 50% 45%, #1c2230, #0c0d12);
+            display: grid; place-items: center; color: #445; }
+  #vpanel { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55);
+            padding: 12px; border-radius: 8px; font-size: 12px; width: 200px; }
+  #vpanel label { display: block; margin: 3px 0; }
+  #vpanel .metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
+                     white-space: pre; }
+
+  /* 모달 */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
+             place-items: center; z-index: 10; }
+  #overlay.on { display: grid; }
+  #modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 440px;
+           max-width: 90%; padding: 22px; }
+  #modal h3 { margin: 0 0 14px; font-size: 15px; }
+  .drop { border: 2px dashed #3a3a3a; border-radius: 10px; padding: 34px; text-align: center;
+          color: #888; font-size: 13px; }
+  .drop b { color: #ccc; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .ghost { background: transparent; color: #aaa; border: 1px solid #333; border-radius: 8px;
+           padding: 8px 14px; cursor: pointer; }
+
+  .switcher { position: fixed; bottom: 8px; left: 12px; font-size: 11px; color: #666; }
+  .switcher button { background: #222; color: #aaa; border: 1px solid #333; border-radius: 5px;
+                     padding: 3px 8px; cursor: pointer; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ============ 사이드바 ============ -->
+<aside id="sidebar">
+  <header>
+    <h1>seg-and-mesh</h1>
+    <button class="new-btn" onclick="document.getElementById('overlay').classList.add('on')">+ 새 작업</button>
+  </header>
+  <div id="joblist">
+    <div class="job active">
+      <div class="name">job-7f3a…</div>
+      <div class="row"><span class="chip await">시리즈 선택</span></div>
+    </div>
+    <div class="job">
+      <div class="name">job-91cd…</div>
+      <div class="row"><span class="chip run">세그 중</span></div>
+      <div class="bar"><i style="width:55%"></i></div>
+    </div>
+    <div class="job">
+      <div class="name">job-2b60…</div>
+      <div class="row"><span class="chip run">메시 중</span></div>
+      <div class="bar"><i style="width:88%"></i></div>
+    </div>
+    <div class="job">
+      <div class="name">job-ee14…</div>
+      <div class="row"><span class="chip done">완료</span></div>
+    </div>
+    <div class="job">
+      <div class="name">job-08af…</div>
+      <div class="row"><span class="chip err">실패</span></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ============ 메인 (상태별로 하나만 보임) ============ -->
+<div id="main">
+
+  <!-- (1) 시리즈 선택 상태 -->
+  <div class="panel" id="stage-select">
+    <h2>세그할 시리즈 선택</h2>
+    <div class="sub">업로드에서 3개 시리즈를 찾음. 자동선택 안 함 — 하나 고르세요.</div>
+
+    <div class="series sel">
+      <input type="radio" name="s" checked>
+      <div class="meta">
+        <div class="title">T1 MPRAGE</div>
+        <div class="facts">176 슬라이스 · 1.0×1.0×1.0 mm · 3D</div>
+        <div class="reasons">✓ 3D · ✓ 등방복셀 · ✓ 슬라이스 충분</div>
+      </div>
+      <span class="rank">1순위 · 0.92</span>
+    </div>
+
+    <div class="series">
+      <input type="radio" name="s">
+      <div class="meta">
+        <div class="title">T2 FLAIR</div>
+        <div class="facts">40 슬라이스 · 0.9×0.9×4.0 mm · 2D</div>
+        <div class="reasons">△ 두꺼운 슬라이스 · △ 비등방</div>
+      </div>
+      <span class="rank">2순위 · 0.31</span>
+    </div>
+
+    <div class="series">
+      <input type="radio" name="s">
+      <div class="meta">
+        <div class="title">Localizer</div>
+        <div class="facts">3 슬라이스 · 1.5×1.5×7.0 mm · 2D</div>
+        <div class="reasons">✗ 스카우트 · ✗ 슬라이스 부족</div>
+      </div>
+      <span class="rank">3순위 · 0.04</span>
+    </div>
+
+    <button class="primary">세그 시작 →</button>
+  </div>
+
+  <!-- (2) 진행률 상태 (숨김, 스위처로 전환) -->
+  <div class="panel" id="stage-progress" style="display:none">
+    <h2>처리 중 · job-91cd…</h2>
+    <div class="sub">T1 MPRAGE 세그 중 (GPU)</div>
+    <div class="steps">
+      <div class="step"><span class="dot ok">✓</span> 업로드 · dcm2niix</div>
+      <div class="step"><span class="dot ok">✓</span> 시리즈 선택</div>
+      <div class="step"><span class="dot now">●</span> 세그멘테이션 (FastSurfer)</div>
+      <div class="step"><span class="dot wait">○</span> 라벨 리맵</div>
+      <div class="step"><span class="dot wait">○</span> 메시 생성</div>
+    </div>
+    <div class="bigbar"><i></i></div>
+  </div>
+
+  <!-- (3) 뷰어 상태 (숨김, 스위처로 전환) -->
+  <div id="viewer" style="display:none">
+    <div id="vpanel">
+      <label><input type="checkbox"> 반투명 셸</label>
+      <div style="color:#889;margin-top:6px">group</div>
+      <label><input type="checkbox" checked> cortical</label>
+      <label><input type="checkbox" checked> subcortical</label>
+      <div style="color:#889;margin-top:6px">side</div>
+      <label><input type="checkbox" checked> left</label>
+      <label><input type="checkbox" checked> right</label>
+      <div class="metrics">변형 v01-a3f2
+영역 96개
+라벨표 canonical-v1</div>
+    </div>
+    <div style="font-size:40px">🧠 3D 메시</div>
+  </div>
+
+  <div class="stage-note">와이어프레임 — 실기능 없음</div>
+</div>
+
+<!-- ============ 업로드 모달 ============ -->
+<div id="overlay">
+  <div id="modal">
+    <h3>새 작업 — MRI 업로드</h3>
+    <div class="drop">
+      <b>DICOM 폴더·zip / NIfTI</b> 를 여기로 끌어놓기<br>
+      <span style="font-size:11px">또는 클릭해서 선택</span>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="document.getElementById('overlay').classList.remove('on')">취소</button>
+      <button class="primary" style="margin-top:0">업로드</button>
+    </div>
+  </div>
+</div>
+
+<!-- 상태 미리보기 스위처 (와이어프레임 전용) -->
+<div class="switcher">
+  상태 미리보기:
+  <button onclick="show('stage-select')">시리즈 선택</button>
+  <button onclick="show('stage-progress')">진행률</button>
+  <button onclick="show('viewer')">뷰어</button>
+</div>
+<script>
+  function show(id){
+    for(const el of ['stage-select','stage-progress','viewer'])
+      document.getElementById(el).style.display = 'none';
+    const t = document.getElementById(id);
+    t.style.display = id==='viewer' ? 'flex' : 'block';
+  }
+</script>
+</body>
+</html>

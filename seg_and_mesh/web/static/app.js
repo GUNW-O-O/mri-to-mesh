@@ -80,6 +80,7 @@ function showStage(state) {
   for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
     document.getElementById(id).style.display = 'none';
   document.getElementById('vpanel').style.display = state==='done' ? 'block' : 'none';
+  if (state !== 'done') viewer.clear();
   const show = map[state];
   if (show) document.getElementById(show).style.display = 'block';
 }
@@ -105,8 +106,25 @@ function renderSelect(s) {
   el.dataset.pick = 0;
   const go = document.createElement('button');
   go.className = 'primary'; go.textContent = '세그 시작 →';
-  go.onclick = async () => { await api.selectSeries(selectedJob, Number(el.dataset.pick));
-                             await refreshJobs(); renderStage(); };
+  go.onclick = async () => {
+    if (go.disabled) return;
+    go.disabled = true; go.textContent = '시작 중…';
+    try {
+      await api.selectSeries(selectedJob, Number(el.dataset.pick));
+      await refreshJobs(); renderStage();
+    } catch (err) {
+      console.error('[selectSeries]', err);
+      go.disabled = false; go.textContent = '세그 시작 →';
+      let msg = el.querySelector('.select-err');
+      if (!msg) {
+        msg = document.createElement('div');
+        msg.className = 'sub select-err';
+        msg.style.marginTop = '8px';
+        el.append(msg);
+      }
+      msg.textContent = err.message || '시리즈 선택 실패';
+    }
+  };
   el.append(go);
 }
 
@@ -132,19 +150,46 @@ function renderError(s) {
 // ---------- 뷰어 ----------
 function showViewer(s) {
   const v = s.variants && s.variants[0];
-  if (v) viewer.showVariant(selectedJob, v.variantId);
+  if (!v) return;
+  const jobId = selectedJob;
+  viewer.showVariant(jobId, v.variantId).catch(err => {
+    console.error('[showVariant]', err);
+    if (selectedJob !== jobId) return;
+    const metrics = document.getElementById('metrics');
+    if (metrics) metrics.textContent = '메시 로드 실패';
+  });
 }
 
 // ---------- 업로드 모달 ----------
 const overlay = document.getElementById('overlay');
 document.getElementById('new-job').onclick = () => overlay.classList.add('on');
-document.getElementById('upload-cancel').onclick = () => overlay.classList.remove('on');
-document.getElementById('drop').onclick = () => document.getElementById('file-input').click();
+document.getElementById('upload-cancel').onclick = () => { overlay.classList.remove('on'); clearPicked(); };
+const drop = document.getElementById('drop');
+drop.onclick = () => document.getElementById('file-input').click();
+drop.onkeydown = (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drop.click(); }
+};
 let picked = [];
-document.getElementById('file-input').onchange = (e) => { picked = [...e.target.files]; };
-setupDrop(document.getElementById('drop'), fs => { picked = fs; });
-document.getElementById('upload-go').onclick = async () => {
+const dropStatus = document.getElementById('drop-status');
+const fileInput = document.getElementById('file-input');
+fileInput.onchange = (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  try {
+    const kind = classifySingleFile(files[0]);
+    setPicked(files, kind);
+  } catch (err) {
+    clearPicked(); showModalError(err.message);
+  }
+};
+setupDrop(drop, (files, kind) => setPicked(files, kind), err => {
+  clearPicked(); showModalError(err.message || '입력을 읽지 못했습니다');
+});
+const uploadGo = document.getElementById('upload-go');
+uploadGo.onclick = async () => {
+  if (uploadGo.disabled) return;
   if (!picked.length) return;
+  uploadGo.disabled = true; uploadGo.textContent = '업로드 중…';
   const name = document.getElementById('name').value.trim();
   let jobId;
   try {
@@ -152,12 +197,30 @@ document.getElementById('upload-go').onclick = async () => {
   } catch (err) {
     console.error('[upload]', err);
     showModalError(err.message || '업로드 실패');
+    uploadGo.disabled = false; uploadGo.textContent = '업로드';
     return; // 모달은 열어둔 채로 — 재시도할 수 있게
   }
-  overlay.classList.remove('on'); picked = []; document.getElementById('name').value = '';
-  document.getElementById('file-input').value = '';
+  overlay.classList.remove('on'); clearPicked(); document.getElementById('name').value = '';
+  uploadGo.disabled = false; uploadGo.textContent = '업로드';
   await refreshJobs(); selectJob(jobId);
 };
+function classifySingleFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.nii') || name.endsWith('.nii.gz')) return 'NIfTI';
+  if (name.endsWith('.zip')) return 'ZIP';
+  throw new Error('단일 파일은 .zip, .nii, .nii.gz만 지원합니다');
+}
+function setPicked(files, kind) {
+  picked = files;
+  dropStatus.textContent = `${kind} · ${files.length}개 파일`;
+  document.getElementById('modal').querySelector('.modal-err')?.remove();
+}
+function clearPicked() {
+  picked = [];
+  fileInput.value = '';
+  dropStatus.textContent = '선택된 입력 없음';
+  document.getElementById('modal').querySelector('.modal-err')?.remove();
+}
 function showModalError(msg) {
   const modal = document.getElementById('modal');
   let el = modal.querySelector('.modal-err');
@@ -172,24 +235,37 @@ function showModalError(msg) {
 }
 
 // 폴더 드롭: DataTransfer 항목을 재귀로 훑어 파일만 모은다.
-function setupDrop(el, cb) {
+function setupDrop(el, cb, onError) {
   el.ondragover = (e) => { e.preventDefault(); };
   el.ondrop = async (e) => {
     e.preventDefault();
     const items = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry?.()).filter(Boolean);
-    const files = [];
-    for (const entry of items) await walkEntry(entry, files);
-    if (files.length) cb(files);
+    try {
+      if (!items.length) throw new Error('드롭한 항목을 읽지 못했습니다');
+      const dirs = items.filter(entry => entry.isDirectory);
+      if (dirs.length && (items.length !== 1 || dirs.length !== 1))
+        throw new Error('폴더와 파일을 함께 드롭할 수 없습니다');
+
+      const files = [];
+      for (const entry of items) await walkEntry(entry, files);
+      if (!files.length) throw new Error('폴더에 파일이 없습니다');
+
+      if (dirs.length) cb(files, 'DICOM 폴더');
+      else if (files.length === 1) cb(files, classifySingleFile(files[0]));
+      else cb(files, 'DICOM 파일 묶음');
+    } catch (err) {
+      onError(err);
+    }
   };
 }
 function walkEntry(entry, out) {
-  return new Promise((resolve) => {
-    if (entry.isFile) entry.file(f => { out.push(f); resolve(); });
+  return new Promise((resolve, reject) => {
+    if (entry.isFile) entry.file(f => { out.push(f); resolve(); }, reject);
     else if (entry.isDirectory) {
       const rd = entry.createReader();
       // Chromium은 한 번 호출에 ~100개까지만 준다 — 빈 배열이 올 때까지 반복 호출해야
       // 큰 DICOM 폴더(슬라이스 수백 장)를 안 흘린다.
-      const readBatch = () => new Promise(res => rd.readEntries(res, () => res([])));
+      const readBatch = () => new Promise((res, rej) => rd.readEntries(res, rej));
       (async () => {
         for (;;) {
           const es = await readBatch();
@@ -197,7 +273,7 @@ function walkEntry(entry, out) {
           for (const e of es) await walkEntry(e, out);
         }
         resolve();
-      })();
+      })().catch(reject);
     } else resolve();
   });
 }

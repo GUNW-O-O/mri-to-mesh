@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
@@ -127,6 +128,7 @@ def _checked_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
 def create_app(config: AppConfig) -> FastAPI:
     app = FastAPI(title="seg-and-mesh")
     config.jobs_root.mkdir(parents=True, exist_ok=True)
+    series_locks: dict[str, Lock] = {}
 
     def _clean_name(name: str | None, fallback: str) -> str:
         if not name:
@@ -210,14 +212,24 @@ def create_app(config: AppConfig) -> FastAPI:
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
 
-        # 클라가 index를 보내고, 서버는 자기 신뢰 데이터(status.series)에서
-        # niftiPath를 꺼낸다 — 클라가 경로 자체를 보낼 필요가 없어져
-        # 경로조작(path traversal / arbitrary read) 표면이 사라진다.
-        job_status = read_status(paths)
-        series = job_status.series
-        if not (0 <= sel.seriesIndex < len(series)):
-            raise HTTPException(400, "잘못된 시리즈 index")
-        selected_nifti = series[sel.seriesIndex]["niftiPath"]
+        # 버튼 연타·반복 POST가 같은 출력 폴더에서 FastSurfer를 중복 실행하지
+        # 못하게, 잡별 lock 안에서 상태 확인과 running 전환을 한 동작으로 묶는다.
+        # 프로세스 하나인 로컬 워크벤치 범위의 lock이다.
+        lock = series_locks.setdefault(job_id, Lock())
+        with lock:
+            # 클라가 index를 보내고, 서버는 자기 신뢰 데이터(status.series)에서
+            # niftiPath를 꺼낸다 — 클라가 경로 자체를 보낼 필요가 없어져
+            # 경로조작(path traversal / arbitrary read) 표면이 사라진다.
+            job_status = read_status(paths)
+            if job_status.state != "awaiting_series":
+                raise HTTPException(409, "이미 시작됐거나 선택할 수 없는 job")
+            series = job_status.series
+            if not (0 <= sel.seriesIndex < len(series)):
+                raise HTTPException(400, "잘못된 시리즈 index")
+            selected_nifti = series[sel.seriesIndex]["niftiPath"]
+            job_status.state = "running"
+            job_status.step = "segment"
+            write_status(paths, job_status)
 
         def work():
             # 파이프라인은 예상한 실패(SegmentError 등)는 단계별로 record_error
