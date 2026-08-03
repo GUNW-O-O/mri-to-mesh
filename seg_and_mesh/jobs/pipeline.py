@@ -60,9 +60,18 @@ def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=Non
     # "running"에 멈춰 있지 않고, 원본 경로가 섞인 예외 메시지가
     # sanitize_stderr 없이 그대로 새지 않는다. 그러려면 실패해도 되돌아갈
     # status.json이 미리 있어야 하므로, 여기서 먼저 하나 써 둔다.
+    #
+    # case_name: 호출자(web/app.py의 upload)가 이미 사용자 라벨을 담아
+    # status.json을 써 둔 채로 여기 들어올 수 있다 — 그 라벨을 모르는
+    # job_id로 덮어쓰면 안 되므로, 디스크에 이미 있으면 그대로 이어받는다.
+    # 없으면(직접 ingest_job을 부르는 테스트 등) job_id로 대체한다.
+    if paths.status_file.is_file():
+        case_name = read_status(paths).case_name
+    else:
+        case_name = paths.root.name
     status = JobStatus(
         job_id=paths.root.name,
-        case_name=paths.root.name,
+        case_name=case_name,
         created_at=now_iso(),
         updated_at=now_iso(),
         state="running",
@@ -110,6 +119,16 @@ def run_segmentation_and_mesh(
     status = read_status(paths)
     status.state = "running"
     status.selected_series = {"niftiPath": str(selected_nifti)}
+    # 서빙(_strip_selected)이 series와 대조해 index를 찾지만, 선택 시점의 얕은
+    # 메타를 같이 남겨 두면 series가 나중에 비어도 표시가 안정적이다.
+    for c in status.series:
+        if c.get("niftiPath") == str(selected_nifti):
+            status.selected_series.update({
+                "description": c.get("description"),
+                "slices": c.get("slices"),
+                "voxelSizeMm": c.get("voxelSizeMm"),
+            })
+            break
     status.step = "segment"
     write_status(paths, status)
 

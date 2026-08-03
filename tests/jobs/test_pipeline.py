@@ -12,7 +12,7 @@ import numpy as np
 import seg_and_mesh.jobs.pipeline as pipeline_mod
 from seg_and_mesh.jobs.layout import job_paths
 from seg_and_mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
-from seg_and_mesh.jobs.status import read_status
+from seg_and_mesh.jobs.status import JobStatus, read_status, write_status
 from seg_and_mesh.labels import RemapError
 from seg_and_mesh.mesh import GenerateError
 from seg_and_mesh.segment import SEG_SOURCE_FILE
@@ -42,6 +42,23 @@ def test_ingest_nifti_stops_at_awaiting_series(tmp_path):
     assert len(status.series) == 1  # 직접 NIfTI는 시리즈 하나
     # 게이트: 아직 segment 안 돌았다
     assert not (p.seg_dir / "seg.nii.gz").exists()
+
+
+def test_ingest_preserves_existing_case_name(tmp_path):
+    """web/app.py의 upload는 ingest_job 부르기 전에 사용자 라벨을 담은
+    status.json을 미리 써 둔다 — ingest_job이 자기 status를 새로 쓸 때
+    그 라벨을 job_id로 덮어쓰면 안 된다(리뷰 반영: 루트 원인 수정)."""
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    write_status(p, JobStatus(
+        job_id="job1", case_name="라벨X", created_at="t", updated_at="t",
+        state="running", step="io", input={"filename": "<file>", "bytes": 0},
+    ))
+    src = _t1_upload(tmp_path)
+
+    status = ingest_job(p, src, "input.nii.gz")
+
+    assert status.case_name == "라벨X"
+    assert read_status(p).case_name == "라벨X"
 
 
 def _fastsurfer_mock(subject_dir_root, sid):

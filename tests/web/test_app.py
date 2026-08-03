@@ -57,7 +57,7 @@ def _client(tmp_path):
 
 def test_upload_creates_job_awaiting_series(tmp_path):
     client, _ = _client(tmp_path)
-    r = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())})
+    r = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())})
     assert r.status_code == 200
     jid = r.json()["jobId"]
 
@@ -66,13 +66,48 @@ def test_upload_creates_job_awaiting_series(tmp_path):
     assert len(s["series"]) == 1
 
 
+def test_upload_accepts_folder_of_many_files_flattened(tmp_path):
+    client, _ = _client(tmp_path)
+    # DICOM 폴더 흉내: 매직바이트가 DICOM인 파일 3개(파일명·상대경로 제각각)
+    dicom = b"\x00" * 128 + b"DICM" + b"\x00" * 64
+    files = [
+        ("files", ("A/very/deep/nas/path/IM0001", dicom)),
+        ("files", ("A/very/deep/nas/path/IM0002", dicom)),
+        ("files", ("B/IM0001", dicom)),  # 다른 폴더의 동명 파일
+    ]
+    r = client.post("/api/jobs", files=files, data={"name": "환자용 라벨"})
+    jid = r.json()["jobId"]
+    # input_dir에 번호로 평탄 저장됐는지(원본 이름·경로 안 씀)
+    input_dir = tmp_path / "jobs" / jid / "input"
+    names = sorted(p.name for p in input_dir.iterdir())
+    assert names == ["0001", "0002", "0003"]
+    # 이름은 case_name으로 살아남아 목록에 뜬다
+    row = next(r for r in client.get("/api/jobs").json() if r["jobId"] == jid)
+    assert row["name"] == "환자용 라벨"
+
+
+def test_upload_name_defaults_to_job_id(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    row = next(r for r in client.get("/api/jobs").json() if r["jobId"] == jid)
+    assert row["name"] == jid
+
+
+def test_upload_name_control_chars_stripped_and_capped(tmp_path):
+    client, _ = _client(tmp_path)
+    raw = "a\x00b\nc" + "x" * 300
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())},
+                      data={"name": raw}).json()["jobId"]
+    row = next(r for r in client.get("/api/jobs").json() if r["jobId"] == jid)
+    assert "\x00" not in row["name"] and "\n" not in row["name"]
+    assert len(row["name"]) <= 120
+
+
 def test_series_selection_runs_pipeline_to_done(tmp_path):
     client, holder = _client(tmp_path)
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
     holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
-
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    r = client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    r = client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
     assert r.status_code == 200
 
     # 백그라운드 완료 대기 (테스트는 동기 실행하거나 폴링)
@@ -83,6 +118,28 @@ def test_series_selection_runs_pipeline_to_done(tmp_path):
         time.sleep(0.1)
     assert s["state"] == "done", s.get("error")
     assert len(s["variants"]) == 1
+
+
+def test_served_status_has_no_niftipath(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = client.get(f"/api/jobs/{jid}").json()
+    assert s["state"] == "awaiting_series"
+    assert "niftiPath" not in json.dumps(s)      # 어디에도 경로 없음
+    assert s["series"][0]["index"] == 0          # index로 식별
+    assert "description" in s["series"][0]
+
+
+def test_selected_series_served_without_path(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
+    s = client.get(f"/api/jobs/{jid}").json()
+    sel = s["selectedSeries"]
+    assert sel is not None
+    assert set(sel) <= {"index", "description", "slices", "voxelSizeMm"}
+    assert "niftiPath" not in json.dumps(sel)
 
 
 def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
@@ -99,9 +156,8 @@ def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
         threads=4, fastsurfer_runner=boom,
     )
     client = TestClient(create_app(cfg))
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
 
     for _ in range(50):
         s = client.get(f"/api/jobs/{jid}").json()
@@ -133,6 +189,29 @@ def test_static_mount_blocks_traversal(tmp_path):
     assert client.get("/static/../app.py").status_code == 404
 
 
+def test_list_jobs_returns_summaries_without_phi(tmp_path):
+    client, _ = _client(tmp_path)
+    # 잡 두 개 업로드(둘 다 awaiting_series에서 멈춤)
+    for _ in range(2):
+        client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())})
+
+    rows = client.get("/api/jobs").json()
+    assert len(rows) == 2
+    keys = set(rows[0])
+    assert keys == {"jobId", "name", "state", "step", "createdAt", "variantCount"}
+    # PHI 부재: 목록 응답 어디에도 파일명·경로·series 필드가 없다.
+    blob = json.dumps(rows)
+    assert "niftiPath" not in blob
+    assert "scan.nii.gz" not in blob
+    # Check that 'series' is not present as a field key in any row
+    assert not any("series" in row for row in rows)
+
+
+def test_list_jobs_empty(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.get("/api/jobs").json() == []
+
+
 # --- 아래는 브리프의 3개 테스트를 넘어서는 추가 커버리지다 ---
 # (§6.3 게이트가 HTTP 경계에서도 지켜지는지, 경로 검증, PHI 안전성, 404들)
 
@@ -153,7 +232,7 @@ def test_upload_alone_never_produces_segmentation(tmp_path):
     )
     client = TestClient(create_app(cfg))
 
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
 
     s = client.get(f"/api/jobs/{jid}").json()
     assert s["state"] == "awaiting_series"
@@ -171,38 +250,42 @@ def test_get_unknown_job_is_404(tmp_path):
 
 def test_series_selection_unknown_job_is_404(tmp_path):
     client, _ = _client(tmp_path)
-    r = client.post("/api/jobs/no-such-job/series", json={"niftiPath": "whatever"})
+    r = client.post("/api/jobs/no-such-job/series", json={"seriesIndex": 0})
     assert r.status_code == 404
 
 
-def test_series_selection_rejects_path_not_in_candidates(tmp_path):
-    """클라이언트가 이 잡의 랭킹 후보에 없는 임의 경로를 보내면 거부한다.
+def test_series_selection_by_index_rejects_out_of_range(tmp_path):
+    """범위 밖 index를 보내면 거부한다.
 
-    niftiPath는 이 잡의 status.series에 있는 값이어야만 한다 — 그렇지
-    않으면 서버가 클라이언트가 지정한 임의 파일을 그대로 열어 FastSurfer에
-    넘기는 경로 조작(path traversal / arbitrary read) 위험이 된다.
+    seriesIndex는 서버가 자기 status.series 배열 길이 안에서만 받아들인다
+    — 그 이상은 서버가 자기 신뢰 데이터를 벗어난 index로 임의 접근하는
+    셈이라 400으로 막는다(경로를 클라가 안 보내므로 경로 조작 표면 자체가
+    없어졌다는 점이 브리프의 핵심 변경이다).
     """
     client, _ = _client(tmp_path)
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
 
-    other_job_dir = tmp_path / "jobs" / "other-job" / "nifti"
-    other_job_dir.mkdir(parents=True)
-    sneaky = other_job_dir / "secret.nii.gz"
-    sneaky.write_bytes(b"not a real nifti")
-
-    r = client.post(f"/api/jobs/{jid}/series", json={"niftiPath": str(sneaky)})
+    r = client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 99})
     assert r.status_code == 400
     # 거부됐으니 세그멘테이션 산출물도 없어야 한다
     assert not (tmp_path / "jobs" / jid / "seg" / "seg.nii.gz").exists()
 
 
-def test_glb_and_meta_are_served_after_done(tmp_path):
+def test_series_selection_rejects_repeat_after_started(tmp_path):
     client, holder = _client(tmp_path)
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
     holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
 
-    nifti_path = client.get(f"/api/jobs/{jid}").json()["series"][0]["niftiPath"]
-    client.post(f"/api/jobs/{jid}/series", json={"niftiPath": nifti_path})
+    assert client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0}).status_code == 200
+    assert client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0}).status_code == 409
+
+
+def test_glb_and_meta_are_served_after_done(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
 
     s = None
     for _ in range(50):
@@ -225,7 +308,7 @@ def test_glb_and_meta_are_served_after_done(tmp_path):
 
 def test_glb_missing_variant_is_404(tmp_path):
     client, _ = _client(tmp_path)
-    jid = client.post("/api/jobs", files={"file": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
 
     r = client.get(f"/api/jobs/{jid}/variants/no-such-variant/regions.glb")
     assert r.status_code == 404
@@ -246,7 +329,7 @@ def test_dotted_job_id_is_not_falsely_rejected(tmp_path):
     r = client.get("/api/jobs/a..b")
     assert r.status_code == 404
 
-    r = client.post("/api/jobs/a..b/series", json={"niftiPath": "x"})
+    r = client.post("/api/jobs/a..b/series", json={"seriesIndex": 0})
     assert r.status_code == 404
 
     r = client.get("/api/jobs/foo/variants/a..b/regions.glb")
@@ -270,7 +353,7 @@ def test_windows_drive_relative_job_id_is_rejected(tmp_path):
         r = client.get(f"/api/jobs/{bad}")
         assert r.status_code == 400, f"{bad!r}: {r.status_code}"
 
-        r = client.post(f"/api/jobs/{bad}/series", json={"niftiPath": "x"})
+        r = client.post(f"/api/jobs/{bad}/series", json={"seriesIndex": 0})
         assert r.status_code == 400, f"{bad!r}: {r.status_code}"
 
         r = client.get(f"/api/jobs/foo/variants/{bad}/regions.glb")
@@ -289,7 +372,7 @@ def test_upload_filename_traversal_is_contained(tmp_path):
     client, _ = _client(tmp_path)
     r = client.post(
         "/api/jobs",
-        files={"file": ("../../evil.nii.gz", _nifti_bytes())},
+        files={"files": ("../../evil.nii.gz", _nifti_bytes())},
     )
     assert r.status_code == 200
     jid = r.json()["jobId"]
@@ -314,7 +397,7 @@ def test_upload_failure_is_phi_safe(tmp_path):
     fake_patient_name = "Jane_Q_Placeholder"  # 확장자·구분자 없는 맨 이름
     r = client.post(
         "/api/jobs",
-        files={"file": (fake_patient_name, b"not a real medical image, just garbage bytes")},
+        files={"files": (fake_patient_name, b"not a real medical image, just garbage bytes")},
     )
     # 업로드 자체는 잡을 만들고(ingest_job이 내부적으로 io 실패를 잡아 상태에
     # 기록한다), 응답에도 200이 나온다 — 실패는 status.json의 error로 드러난다.
@@ -331,13 +414,14 @@ def test_upload_failure_is_phi_safe(tmp_path):
 
 
 def test_upload_dotdot_filename_does_not_500(tmp_path):
-    """멀티파트 파일명이 정확히 ".."이면 Path("..").name도 ".."을 그대로
-    돌려준다(빈 문자열이 아니다) — input_dir/".."은 잡 루트 자체(이미 있는
-    디렉터리)라 안전장치 없이 write_bytes하면 500으로 터진다. 항상
-    200 + 기록된 상태(정상 진행 또는 error)여야 한다.
+    """평탄화 회귀 점검: 클라이언트 파일명은 이제 통째로 버려지고 번호로만
+    저장되므로(입력 파일명은 서버 어디에도 안 쓰인다) ".."을 파일명으로
+    보내도 그 값 자체는 무해하다. 그래도 업로드는 항상 200 +
+    기록된 상태(정상 진행 또는 error)여야 하고, 절대 맨 500으로 터지면
+    안 된다는 걸 지킨다.
     """
     client, _ = _client(tmp_path)
-    r = client.post("/api/jobs", files={"file": ("..", b"whatever bytes")})
+    r = client.post("/api/jobs", files={"files": ("..", b"whatever bytes")})
     assert r.status_code == 200
     jid = r.json()["jobId"]
 
