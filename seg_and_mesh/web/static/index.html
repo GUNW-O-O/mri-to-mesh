@@ -2,16 +2,94 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>seg-and-mesh 뷰어</title>
+<title>seg-and-mesh 워크벤치</title>
 <style>
-  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
-  #canvas { position: fixed; inset: 0; }
-  #panel { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,.6);
-           padding: 12px; border-radius: 8px; max-width: 320px; font-size: 13px; }
-  #panel input[type=text] { width: 180px; }
-  button { margin: 2px; }
-  #metrics { white-space: pre; font-family: monospace; font-size: 11px; margin-top: 8px; }
-  label { display: block; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee;
+         height: 100vh; display: flex; overflow: hidden; }
+
+  /* ---------- 캔버스(항상 존재하는 3D 레이어) ---------- */
+  #canvas { position: fixed; inset: 0; z-index: 0; }
+
+  /* ---------- 사이드바 ---------- */
+  #sidebar { position: relative; z-index: 1; width: 280px; flex: 0 0 280px; background: #181818;
+             border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; }
+  #sidebar header { padding: 14px 16px; border-bottom: 1px solid #2a2a2a;
+                    display: flex; align-items: center; justify-content: space-between; }
+  #sidebar header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  .new-btn { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
+             padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  #joblist { overflow-y: auto; flex: 1; padding: 8px; }
+  .job { padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer;
+         border: 1px solid transparent; }
+  .job:hover { background: #202020; }
+  .job.active { background: #22314f; border-color: #2d6cdf; }
+  .job .name { font-size: 13px; margin-bottom: 6px; font-family: monospace; }
+  .job .row { display: flex; align-items: center; gap: 8px; }
+  .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .chip.done   { background: #14361f; color: #4ade80; }
+  .chip.run    { background: #3a2e0e; color: #fbbf24; }
+  .chip.await  { background: #0e2a3a; color: #38bdf8; }
+  .chip.err    { background: #3a1414; color: #f87171; }
+  .bar { height: 4px; background: #2a2a2a; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: #fbbf24; }
+
+  /* ---------- 메인 ---------- */
+  #main { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; }
+
+  /* 상태 패널 공통 */
+  .panel { margin: auto; width: 560px; max-width: 90%; }
+  .panel h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .panel .sub { color: #888; font-size: 12px; margin-bottom: 18px; }
+
+  /* 시리즈 선택 */
+  .series { border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+            display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+  .series:hover { border-color: #3a3a3a; }
+  .series.sel { border-color: #2d6cdf; background: #16233c; }
+  .series input { margin-top: 3px; }
+  .series .meta { flex: 1; }
+  .series .title { font-size: 14px; margin-bottom: 4px; }
+  .series .facts { font-size: 12px; color: #9aa; font-family: monospace; }
+  .series .reasons { font-size: 11px; color: #6b8; margin-top: 6px; }
+  .series .rank { font-size: 10px; color: #fbbf24; border: 1px solid #3a2e0e; border-radius: 6px;
+                  padding: 2px 6px; align-self: flex-start; }
+  .primary { background: #2d6cdf; color: #fff; border: 0; border-radius: 8px;
+             padding: 10px 18px; font-size: 13px; cursor: pointer; margin-top: 8px; }
+
+  /* 진행률 */
+  .steps { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+  .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
+         display: grid; place-items: center; font-size: 10px; }
+  .dot.ok  { background: #14361f; color: #4ade80; }
+  .dot.now { background: #3a2e0e; color: #fbbf24; }
+  .dot.wait{ background: #222; color: #555; }
+  .bigbar { height: 6px; background: #2a2a2a; border-radius: 3px; margin-top: 24px; overflow: hidden; }
+  .bigbar > i { display: block; height: 100%; width: 0%; background: #fbbf24; }
+
+  /* 뷰어 패널 */
+  #vpanel { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55);
+            padding: 12px; border-radius: 8px; font-size: 12px; width: 200px; }
+  #vpanel label { display: block; margin: 3px 0; }
+  #metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
+             white-space: pre; }
+
+  /* 모달 */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
+             place-items: center; z-index: 10; }
+  #overlay.on { display: grid; }
+  #modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 440px;
+           max-width: 90%; padding: 22px; }
+  #modal h3 { margin: 0 0 14px; font-size: 15px; }
+  #name { width: 100%; background: #111; color: #eee; border: 1px solid #333; border-radius: 8px;
+          padding: 8px 10px; font-size: 13px; margin-bottom: 12px; }
+  .drop { border: 2px dashed #3a3a3a; border-radius: 10px; padding: 34px; text-align: center;
+          color: #888; font-size: 13px; }
+  .drop b { color: #ccc; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .ghost { background: transparent; color: #aaa; border: 1px solid #333; border-radius: 8px;
+           padding: 8px 14px; cursor: pointer; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -21,19 +99,49 @@
 </script>
 </head>
 <body>
+
 <canvas id="canvas"></canvas>
-<div id="panel">
-  <div>
-    <input id="jobId" type="text" placeholder="jobId">
-    <input id="variantId" type="text" placeholder="variantId">
-    <button id="load">로드</button>
-  </div>
-  <div>
+
+<!-- ============ 사이드바 ============ -->
+<aside id="sidebar">
+  <header>
+    <h1>seg-and-mesh</h1>
+    <button id="new-job" class="new-btn">+ 새 작업</button>
+  </header>
+  <div id="joblist"></div>
+</aside>
+
+<!-- ============ 메인 (상태별로 app.js가 하나만 보이게 토글) ============ -->
+<div id="main">
+  <div id="stage-empty" class="panel">왼쪽에서 작업을 고르거나 새로 만드세요.</div>
+  <div id="stage-select" class="panel" style="display:none"></div>
+  <div id="stage-progress" class="panel" style="display:none"></div>
+  <div id="stage-error" class="panel" style="display:none"></div>
+
+  <div id="vpanel" style="display:none">
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
+    <div id="groups"></div>
+    <div id="metrics"></div>
   </div>
-  <div id="groups"></div>
-  <div id="metrics"></div>
 </div>
-<script type="module" src="/static/viewer.js"></script>
+
+<!-- ============ 업로드 모달 ============ -->
+<div id="overlay">
+  <div id="modal">
+    <h3>새 작업 — MRI 업로드</h3>
+    <input id="name" type="text" placeholder="작업 이름(선택)">
+    <div id="drop" class="drop">
+      <b>DICOM 폴더·zip / NIfTI</b> 를 여기로 끌어놓기<br>
+      <span style="font-size:11px">또는 클릭해서 선택</span>
+    </div>
+    <input id="file-input" type="file" webkitdirectory multiple style="display:none">
+    <div class="modal-actions">
+      <button id="upload-cancel" class="ghost">취소</button>
+      <button id="upload-go" class="primary" style="margin-top:0">업로드</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>
