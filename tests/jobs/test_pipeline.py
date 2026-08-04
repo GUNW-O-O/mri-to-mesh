@@ -14,7 +14,7 @@ from mri2mesh.jobs.layout import job_paths
 from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
 from mri2mesh.jobs.status import JobStatus, read_status, write_status
 from mri2mesh.labels import RemapError
-from mri2mesh.mesh import GenerateError
+from mri2mesh.mesh import GenerateError, baseline_params
 from mri2mesh.segment import SEG_SOURCE_FILE
 
 
@@ -226,3 +226,26 @@ def test_mesh_failure_records_phi_safe_error(tmp_path, monkeypatch):
     assert status.state == "error"
     assert status.error["step"] == "mesh"
     assert fake_path not in json.dumps(status.error)
+
+
+def _done_paths(tmp_path, job_id="jobV"):
+    """잡을 done까지 몰고 가 JobPaths를 돌려준다(test_full_run 패턴 재사용)."""
+    p = job_paths(tmp_path / "jobs", job_id).create()
+    ingest_job(p, _t1_upload(tmp_path), "input.nii.gz")
+    selected = read_status(p).series[0]["niftiPath"]
+    run_segmentation_and_mesh(
+        p, Path(selected), image="fs:tag",
+        fastsurfer_runner=_fastsurfer_mock(p.fs_dir, "case"),
+    )
+    return p
+
+
+def test_initial_variant_uses_baseline_params(tmp_path):
+    p = _done_paths(tmp_path)
+    status = json.loads(p.status_file.read_text(encoding="utf-8"))
+    vid = status["variants"][0]["variantId"]
+    params = json.loads((p.variant_dir(vid) / "params.json").read_text(encoding="utf-8"))
+    assert params["smoothing"]["method"] == "laplacian"
+    assert params["extractor"]["name"] == "vtk_contour_perlabel"
+    # variantId 해시가 baseline 해시와 일치
+    assert vid.endswith(baseline_params().param_hash())

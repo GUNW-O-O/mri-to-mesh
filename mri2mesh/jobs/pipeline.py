@@ -31,7 +31,7 @@ from mri2mesh.jobs.status import (
     write_status,
 )
 from mri2mesh.labels import RemapError, load_canonical, remap_segmentation
-from mri2mesh.mesh import GenerateError, default_params, generate_variant
+from mri2mesh.mesh import GenerateError, baseline_params, generate_variant
 from mri2mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
 
 
@@ -173,7 +173,7 @@ def run_segmentation_and_mesh(
     write_status(paths, status)
 
     try:
-        params = default_params()
+        params = baseline_params()
         # variantId를 파라미터 해시로 먼저 계산해(스펙 §7) 바로 올바른 폴더에
         # 생성한다 — 임시 폴더에 썼다가 옮기는 우회가 필요 없다.
         variant_id = params.variant_id(1)
