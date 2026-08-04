@@ -69,7 +69,7 @@
     "minVoxel": 100
   }
   ```
-  누락 축은 서버가 기본값으로 채운다(`default_params()` 기준).
+  누락 축은 서버가 baseline으로 채운다(§4.1a `baseline_params()` 기준).
 - 검증: method는 화이트리스트(아래 §4.2), 수치는 범위. 위반 시 400(PHI 없는
   메시지).
 - 처리: 다음 순번 index를 잡아 `generate_variant(seg_path, variant_dir, params, index)`
@@ -80,9 +80,32 @@
 - 응답: `{"variantId": "...", "deduped": false}`.
 - 잡별 `Lock`으로 순번 경쟁 방지(기존 series 선택 lock과 동일 패턴).
 
+### 4.1a 생성옵션 baseline (현재 프로덕션 기본값)
+
+폼 기본값과 엔드포인트의 누락축 채움은 **현재 실제로 쓰이는 값**을 기준으로
+한다 — 사용자가 "지금 이거"에서 다른 옵션을 얼마나 벗어나는지 바로 알게. 이
+값은 `brainds/nifti_pipeline/mesh_export.py`(프로덕션 메쉬 산출 로직)를 참조해
+정한다. 그 로직과 mri2mesh 파라미터의 등가는 확인됨:
+
+| 축 | baseline 값 | 근거(mesh_export.py) |
+|----|-------------|----------------------|
+| preprocess | `none` (isolevel 0.5) | 이진 마스크에 `contour([0.5])` |
+| extractor | `vtk_contour_perlabel` | pyvista `grid.contour([0.5])` = vtkContourFilter |
+| smoothing | `laplacian`, iterations 30, relaxation 0.1 | `surface.smooth(n_iter=30, relaxation_factor=0.1)` = vtkSmoothPolyDataFilter |
+| decimation | `none` | 데시메이션 없음 |
+| minVoxel | 100 | `MIN_VOXEL_COUNT = 100` |
+
+`mri2mesh.mesh.params`에 `baseline_params()`로 추가한다(기존 `default_params()`는
+skimage_mc·smoothing none이라 프로덕션과 다르므로 폼 기본값으로 쓰지 않는다).
+
+**파이프라인 초기 변형(v01)도 이 baseline으로 생성**한다 — 잡을 열면 처음 보이는
+메쉬가 곧 프로덕션 기준선이 되고, 사용자는 그 옆에 대안 변형을 세워 비교한다.
+(현재 파이프라인은 `default_params()`를 쓰므로 이 부분이 바뀐다.)
+
 ### 4.2 메쉬 옵션 폼 (프론트)
 
-`status.state == "done"`인 잡에서 뷰어 위 패널로 연다. `MeshParams` 축 노출:
+`status.state == "done"`인 잡에서 뷰어 위 패널로 연다. **폼은 §4.1a baseline으로
+미리 채워져 열린다** — 거기서 축 하나씩 바꿔 대안을 탐색한다. `MeshParams` 축:
 
 | 축 | 선택지 | 딸린 수치 |
 |----|--------|-----------|
