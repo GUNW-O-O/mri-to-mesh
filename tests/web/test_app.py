@@ -427,3 +427,47 @@ def test_upload_dotdot_filename_does_not_500(tmp_path):
 
     s = client.get(f"/api/jobs/{jid}").json()
     assert s["state"] in ("awaiting_series", "error")
+
+
+# --- 변형(variant) 생성 테스트 (Task 5) ---
+
+
+def _job_to_done(client, holder, tmp_path):
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
+    return jid
+
+
+def test_post_variant_creates_new(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants",
+                    json={"smoothing": {"method": "none"}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["deduped"] is False
+    s = client.get(f"/api/jobs/{jid}").json()
+    assert body["variantId"] in [v["variantId"] for v in s["variants"]]
+
+
+def test_post_variant_dedupes_baseline(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={})  # 빈 = baseline
+    assert r.json()["deduped"] is True
+
+
+def test_post_variant_rejects_bad_params(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants",
+                    json={"decimation": {"method": "quadric", "targetRatio": 9.0}})
+    assert r.status_code == 400
+
+
+def test_post_variant_rejects_non_done(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    r = client.post(f"/api/jobs/{jid}/variants", json={})
+    assert r.status_code == 409
