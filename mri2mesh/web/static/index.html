@@ -79,6 +79,10 @@
   #vpanel label { display: block; margin: 3px 0; }
   #metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
              white-space: pre; }
+  #mesh-options { margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
+  .opt-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-size: 11px; }
+  .opt-row select, .opt-row input { background: #111; color: #eee; border: 1px solid #333;
+                                     border-radius: 5px; font-size: 11px; }
 
   /* 모달 */
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
@@ -130,6 +134,38 @@
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
     <div id="groups"></div>
     <div id="metrics"></div>
+    <div id="mesh-options">
+      <div class="opt-row">
+        <label>preprocess
+          <select id="opt-preprocess"><option>none</option><option>gaussian</option><option>distance</option></select>
+        </label>
+      </div>
+      <div class="opt-row">
+        <label>extractor
+          <select id="opt-extractor">
+            <option>vtk_contour_perlabel</option><option>skimage_mc</option><option>pymcubes</option>
+            <option>vtk_flyingedges</option><option>vtk_surfacenets</option>
+          </select>
+        </label>
+      </div>
+      <div class="opt-row">
+        <label>smoothing
+          <select id="opt-smoothing"><option>laplacian</option><option>none</option><option>taubin</option><option>humphrey</option></select>
+        </label>
+        <label>iter <input id="opt-iterations" type="number" value="30" min="0" max="100" style="width:56px"></label>
+      </div>
+      <div class="opt-row">
+        <label>decimation
+          <select id="opt-decimation"><option>none</option><option>quadric</option></select>
+        </label>
+        <label>ratio <input id="opt-ratio" type="number" value="0.35" min="0.05" max="1" step="0.05" style="width:56px"></label>
+      </div>
+      <div class="opt-row">
+        <label>minVoxel <input id="opt-minvoxel" type="number" value="100" min="0" max="5000" style="width:64px"></label>
+      </div>
+      <button id="gen-variant" class="primary" style="margin-top:0">변형 생성</button>
+      <div id="gen-status" class="sub"></div>
+    </div>
   </div>
 </div>
 

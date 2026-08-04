@@ -1,5 +1,7 @@
 import * as api from './api.js';
 import { Viewer } from './viewer.js';
+import { createVariant } from './api.js';
+import { collectParams } from './options.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
@@ -283,6 +285,24 @@ function walkEntry(entry, out) {
     } else resolve();
   });
 }
+
+// ---------- 옵션 폼 → 변형 생성 ----------
+document.getElementById('gen-variant').onclick = async () => {
+  const btn = document.getElementById('gen-variant');
+  const st = document.getElementById('gen-status');
+  if (btn.disabled || !selectedJob) return;
+  btn.disabled = true; st.textContent = '생성 중…';
+  try {
+    const { variantId } = await createVariant(selectedJob, collectParams());
+    await refreshJobs();
+    await viewer.showVariant(selectedJob, variantId);   // 새 변형으로 갱신
+    st.textContent = variantId;
+  } catch (err) {
+    st.textContent = err.message || '생성 실패';
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 // ---------- 부트 ----------
 refreshJobs();

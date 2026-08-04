@@ -27,6 +27,15 @@ export async function selectSeries(jobId, index) {
   }));
 }
 
+export async function createVariant(jobId, params) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/variants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return j(res);   // 기존 j(): 비정상 응답이면 throw
+}
+
 export function glbUrl(jobId, variantId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}/regions.glb`;
 }
