@@ -190,6 +190,13 @@ def test_index_html_has_option_form_anchors(tmp_path):
     assert 'id="gen-variant"' in html
 
 
+def test_index_html_has_dicom_info_anchors(tmp_path):
+    client, _ = _client(tmp_path)
+    html = client.get("/").text
+    assert 'id="dicom-info"' in html
+    assert 'class="job-info"' in html or 'job-info' in html
+
+
 def test_static_mount_blocks_traversal(tmp_path):
     """StaticFiles가 static/ 밖으로 나가지 못해야 한다(임의 파일 읽기 방지)."""
     client, _ = _client(tmp_path)

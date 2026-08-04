@@ -29,6 +29,9 @@
   .job-del { float: right; background: transparent; border: 0; color: #666; cursor: pointer;
              font-size: 14px; line-height: 1; padding: 0 2px; }
   .job-del:hover { color: #f87171; }
+  .job-info { float: right; background: transparent; border: 0; color: #789;
+              cursor: pointer; font-size: 12px; padding: 0 4px; }
+  .job-info:hover { color: #38bdf8; }
   .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
   .chip.done   { background: #14361f; color: #4ade80; }
   .chip.run    { background: #3a2e0e; color: #fbbf24; }
@@ -91,6 +94,18 @@
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
              place-items: center; z-index: 10; }
   #overlay.on { display: grid; }
+
+  /* DICOM 메타 info 패널 */
+  #dicom-info-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6);
+                        display: none; place-items: center; z-index: 20; }
+  #dicom-info-overlay.on { display: grid; }
+  #dicom-info { background: #1a1a1a; border: 1px solid #333; border-radius: 12px;
+                width: 620px; max-width: 92%; max-height: 82vh; overflow: auto;
+                padding: 20px; font-size: 12px; }
+  #dicom-info h3 { margin: 0 0 10px; font-size: 15px; }
+  #dicom-info .kv { font-family: monospace; font-size: 11px; white-space: pre-wrap;
+                    color: #bcd; }
+  #dicom-info .removed { color: #f7a; }
   #modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 440px;
            max-width: 90%; padding: 22px; }
   #modal h3 { margin: 0 0 14px; font-size: 15px; }
@@ -190,6 +205,11 @@
       <button id="upload-go" class="primary" style="margin-top:0">업로드</button>
     </div>
   </div>
+</div>
+
+<!-- ============ DICOM 메타 info 오버레이 ============ -->
+<div id="dicom-info-overlay">
+  <div id="dicom-info"></div>
 </div>
 
 <script type="module" src="/static/app.js"></script>

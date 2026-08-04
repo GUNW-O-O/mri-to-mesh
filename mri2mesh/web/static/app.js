@@ -1,6 +1,6 @@
 import * as api from './api.js';
 import { Viewer } from './viewer.js';
-import { createVariant, deleteJob } from './api.js';
+import { createVariant, deleteJob, getDicomMeta } from './api.js';
 import { collectParams } from './options.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
@@ -47,7 +47,14 @@ async function refreshJobs() {
         await refreshJobs();
       } catch (err) { console.error('[deleteJob]', err); }
     };
-    div.append(del);
+    const info = document.createElement('button');
+    info.className = 'job-info'; info.textContent = 'ⓘ'; info.title = '메타 정보';
+    info.onclick = async (e) => {
+      e.stopPropagation();
+      try { showDicomInfo(await getDicomMeta(r.jobId)); }
+      catch (err) { console.error('[dicomMeta]', err); }
+    };
+    div.append(del, info);
     el.append(div);
   }
   // 진행 중인 잡이 있으면 목록도 계속 갱신
@@ -315,6 +322,28 @@ document.getElementById('gen-variant').onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// ---------- DICOM 메타 info 패널 ----------
+const dicomOverlay = document.getElementById('dicom-info-overlay');
+dicomOverlay.onclick = (e) => { if (e.target === dicomOverlay) dicomOverlay.classList.remove('on'); };
+function showDicomInfo(m) {
+  const box = document.getElementById('dicom-info');
+  const names = (m.originalFilenames || []).map(esc).join('\n') || '(없음)';
+  let html = `<h3>DICOM 메타 · ${esc(m.source)}</h3>`;
+  html += `<div class="sub">원본 파일명</div><div class="kv">${names}</div>`;
+  if (m.source === 'nifti' || !m.before) {
+    html += `<div class="sub" style="margin-top:10px">NIfTI 입력 — DICOM 메타 없음</div>`;
+  } else {
+    html += `<div class="sub" style="margin-top:10px">before (원본 헤더)</div>`;
+    html += `<div class="kv">${esc(JSON.stringify(m.before, null, 1))}</div>`;
+    html += `<div class="sub" style="margin-top:10px">removed (제거됨)</div>`;
+    html += `<div class="kv removed">${(m.removed||[]).map(esc).join('\n')}</div>`;
+  }
+  html += `<div class="sub" style="margin-top:10px">after (NIfTI 기하)</div>`;
+  html += `<div class="kv">${esc(JSON.stringify(m.after && m.after.nifti, null, 1))}</div>`;
+  box.innerHTML = html;
+  dicomOverlay.classList.add('on');
+}
 
 // ---------- 부트 ----------
 refreshJobs();
