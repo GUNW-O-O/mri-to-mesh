@@ -58,10 +58,18 @@ GPU는 api 컨테이너가 아니라, 그가 docker socket으로 띄우는 형�
 
 ## 개발
 
+의존성·가상환경은 [uv](https://docs.astral.sh/uv/)로 관리한다(Python 3.11–3.12).
+
 ```bash
-uv sync
-uv run pytest
+uv sync          # .venv 자동 생성 + 의존성 설치(uv.lock 고정)
+uv run pytest    # .venv에서 실행 — 별도 activate 불필요
 ```
+
+`uv run`이 `.venv`를 알아서 쓰므로 활성화할 필요 없다. 직접 활성화하려면
+`.venv\Scripts\activate`(Windows) / `source .venv/bin/activate`(POSIX).
+
+`.venv`는 절대경로가 박혀 있어 저장소 폴더를 옮기면 깨진다 — 옮겼으면
+`.venv`를 지우고 `uv sync`로 다시 만든다.
 
 컨테이너 밖 테스트는 `.env.example`의 개발용 변수 참조(`DCM2NIIX_BIN`, `MRI2MESH_TEST_DATA_DIR`).
 
