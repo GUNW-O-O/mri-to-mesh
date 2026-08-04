@@ -478,3 +478,22 @@ def test_post_variant_rejects_non_done(tmp_path):
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
     r = client.post(f"/api/jobs/{jid}/variants", json={})
     assert r.status_code == 409
+
+
+def test_delete_job_removes_it(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    assert (tmp_path / "jobs" / jid).is_dir()
+
+    r = client.delete(f"/api/jobs/{jid}")
+    assert r.status_code == 200
+    assert r.json()["deleted"] == jid
+    assert not (tmp_path / "jobs" / jid).exists()
+    # 목록·상태에서 사라진다
+    assert jid not in [row["jobId"] for row in client.get("/api/jobs").json()]
+    assert client.get(f"/api/jobs/{jid}").status_code == 404
+
+
+def test_delete_missing_job_404(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.delete("/api/jobs/nope-1234").status_code == 404

@@ -19,6 +19,11 @@ export async function getStatus(jobId) {
   return j(await fetch(`/api/jobs/${encodeURIComponent(jobId)}`));
 }
 
+export async function deleteJob(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+  return j(res);
+}
+
 export async function selectSeries(jobId, index) {
   return j(await fetch(`/api/jobs/${encodeURIComponent(jobId)}/series`, {
     method: 'POST',

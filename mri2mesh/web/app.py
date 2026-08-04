@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -206,6 +207,15 @@ def create_app(config: AppConfig) -> FastAPI:
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
         return _status_json(paths)
+
+    @app.delete("/api/jobs/{job_id}")
+    def delete_job(job_id: str) -> dict:
+        # _checked_job_paths가 job_id를 jobs_root 밑으로 가둔다(경로 조작 방지).
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        if not paths.status_file.is_file():
+            raise HTTPException(404, "job 없음")
+        shutil.rmtree(paths.root)
+        return {"deleted": job_id}
 
     @app.post("/api/jobs/{job_id}/series")
     def select_series(job_id: str, sel: SeriesSelection, bg: BackgroundTasks) -> dict:
