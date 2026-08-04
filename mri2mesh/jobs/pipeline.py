@@ -31,7 +31,7 @@ from mri2mesh.jobs.status import (
     write_status,
 )
 from mri2mesh.labels import RemapError, load_canonical, remap_segmentation
-from mri2mesh.mesh import GenerateError, default_params, generate_variant
+from mri2mesh.mesh import GenerateError, baseline_params, generate_variant
 from mri2mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
 
 
@@ -173,7 +173,7 @@ def run_segmentation_and_mesh(
     write_status(paths, status)
 
     try:
-        params = default_params()
+        params = baseline_params()
         # variantId를 파라미터 해시로 먼저 계산해(스펙 §7) 바로 올바른 폴더에
         # 생성한다 — 임시 폴더에 썼다가 옮기는 우회가 필요 없다.
         variant_id = params.variant_id(1)
@@ -205,3 +205,42 @@ def run_segmentation_and_mesh(
 def _image_version(image: str) -> str:
     """이미지 태그에서 버전 문자열을 뽑는다(예: deepmi/fastsurfer:cuda-v2.5.4 → cuda-v2.5.4)."""
     return image.rsplit(":", 1)[-1] if ":" in image else image
+
+
+def add_variant(paths: JobPaths, params, *, table=None) -> dict:
+    """done 잡의 seg 캐시에서 메쉬만 다시 만들어 변형을 추가한다.
+
+    같은 파라미터(해시 일치)면 생성하지 않고 기존 variantId를 돌려준다.
+    Raises:
+        ValueError: 잡이 done이 아니거나 seg.nii.gz가 없을 때.
+    """
+    table = table or load_canonical()
+    status = read_status(paths)
+    seg_canon = paths.seg_dir / "seg.nii.gz"
+    if status.state != "done" or not seg_canon.is_file():
+        raise ValueError("변형 생성은 done 잡에서만 가능하다")
+
+    h = params.param_hash()
+    for v in status.variants:
+        if v["variantId"].endswith(f"-{h}"):
+            return {"variantId": v["variantId"], "deduped": True}
+
+    index = len(status.variants) + 1
+    variant_id = params.variant_id(index)
+    vdir = paths.variant_dir(variant_id)
+    variant = generate_variant(seg_canon, vdir, params, index=index, table=table)
+
+    meta = build_regions_meta(
+        seg_canon, variant.regions, variant.variant_id,
+        engine=status.engine, seg_file=SEG_SOURCE_FILE,
+    )
+    write_regions_meta(vdir / "regions-meta.json", meta)
+
+    status = read_status(paths)
+    status.variants.append({
+        "variantId": variant.variant_id,
+        "bytes": variant.metrics["glbBytes"],
+        "createdAt": variant.params["createdAt"],
+    })
+    write_status(paths, status)
+    return {"variantId": variant.variant_id, "deduped": False}

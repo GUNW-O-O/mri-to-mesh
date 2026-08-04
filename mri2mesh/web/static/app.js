@@ -1,5 +1,7 @@
 import * as api from './api.js';
 import { Viewer } from './viewer.js';
+import { createVariant, deleteJob } from './api.js';
+import { collectParams } from './options.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
@@ -34,6 +36,18 @@ async function refreshJobs() {
     div.innerHTML =
       `<div class="name">${esc(r.name)}</div>` +
       `<div class="row"><span class="chip ${chipClass(r)}">${chipText(r)}</span></div>`;
+    const del = document.createElement('button');
+    del.className = 'job-del'; del.textContent = '×'; del.title = '삭제';
+    del.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm('이 작업과 산출물을 삭제할까요?')) return;
+      try {
+        await deleteJob(r.jobId);
+        if (selectedJob === r.jobId) { selectedJob = null; showStage('empty'); }
+        await refreshJobs();
+      } catch (err) { console.error('[deleteJob]', err); }
+    };
+    div.append(del);
     el.append(div);
   }
   // 진행 중인 잡이 있으면 목록도 계속 갱신
@@ -76,7 +90,7 @@ async function renderStage() {
 function poll(){ clearTimeout(pollTimer); pollTimer = setTimeout(renderStage, 1500); }
 
 function showStage(state) {
-  const map = { awaiting_series:'stage-select', running:'stage-progress', error:'stage-error' };
+  const map = { empty:'stage-empty', awaiting_series:'stage-select', running:'stage-progress', error:'stage-error' };
   for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
     document.getElementById(id).style.display = 'none';
   document.getElementById('vpanel').style.display = state==='done' ? 'block' : 'none';
@@ -283,6 +297,24 @@ function walkEntry(entry, out) {
     } else resolve();
   });
 }
+
+// ---------- 옵션 폼 → 변형 생성 ----------
+document.getElementById('gen-variant').onclick = async () => {
+  const btn = document.getElementById('gen-variant');
+  const st = document.getElementById('gen-status');
+  if (btn.disabled || !selectedJob) return;
+  btn.disabled = true; st.textContent = '생성 중…';
+  try {
+    const { variantId } = await createVariant(selectedJob, collectParams());
+    await refreshJobs();
+    await viewer.showVariant(selectedJob, variantId);   // 새 변형으로 갱신
+    st.textContent = variantId;
+  } catch (err) {
+    st.textContent = err.message || '생성 실패';
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 // ---------- 부트 ----------
 refreshJobs();

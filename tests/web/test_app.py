@@ -183,6 +183,13 @@ def test_static_assets_serve(tmp_path):
         assert client.get(path).status_code == 200
 
 
+def test_index_html_has_option_form_anchors(tmp_path):
+    client, _ = _client(tmp_path)
+    html = client.get("/").text
+    assert 'id="mesh-options"' in html
+    assert 'id="gen-variant"' in html
+
+
 def test_static_mount_blocks_traversal(tmp_path):
     """StaticFiles가 static/ 밖으로 나가지 못해야 한다(임의 파일 읽기 방지)."""
     client, _ = _client(tmp_path)
@@ -427,3 +434,91 @@ def test_upload_dotdot_filename_does_not_500(tmp_path):
 
     s = client.get(f"/api/jobs/{jid}").json()
     assert s["state"] in ("awaiting_series", "error")
+
+
+# --- 변형(variant) 생성 테스트 (Task 5) ---
+
+
+def _job_to_done(client, holder, tmp_path):
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    client.post(f"/api/jobs/{jid}/series", json={"seriesIndex": 0})
+    return jid
+
+
+def test_post_variant_creates_new(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants",
+                    json={"smoothing": {"method": "none"}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["deduped"] is False
+    s = client.get(f"/api/jobs/{jid}").json()
+    assert body["variantId"] in [v["variantId"] for v in s["variants"]]
+
+
+def test_post_variant_dedupes_baseline(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={})  # 빈 = baseline
+    assert r.json()["deduped"] is True
+
+
+def test_post_variant_rejects_bad_params(tmp_path):
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants",
+                    json={"decimation": {"method": "quadric", "targetRatio": 9.0}})
+    assert r.status_code == 400
+
+
+def test_post_variant_rejects_non_dict_axis(tmp_path):
+    """리뷰 발견 #1: 축이 dict가 아니면(.get이 AttributeError로 터지는 대신)
+    400이어야 한다(500이 아니라)."""
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={"preprocess": "x"})
+    assert r.status_code == 400
+
+
+def test_post_variant_generate_error_maps_to_422(tmp_path):
+    """리뷰 발견 #2: 파라미터가 유효해도 minVoxel이 모든 라벨을 걸러내
+    만들 메시가 없으면(GenerateError) 500이 아니라 422여야 한다.
+
+    목 세그의 라벨 17은 복셀 1000개(10*10*10)뿐이라 minVoxel을 그보다
+    크게 주면 유일한 라벨이 걸러져 GenerateError("만들 메시가 없다")가 난다.
+    """
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 1001})
+    assert r.status_code == 422
+    # PHI: seg 경로 등 예외 원문이 본문에 안 새어 나가야 한다
+    assert "seg" not in r.text.lower()
+    assert ".nii" not in r.text
+
+
+def test_post_variant_rejects_non_done(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    r = client.post(f"/api/jobs/{jid}/variants", json={})
+    assert r.status_code == 409
+
+
+def test_delete_job_removes_it(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
+    assert (tmp_path / "jobs" / jid).is_dir()
+
+    r = client.delete(f"/api/jobs/{jid}")
+    assert r.status_code == 200
+    assert r.json()["deleted"] == jid
+    assert not (tmp_path / "jobs" / jid).exists()
+    # 목록·상태에서 사라진다
+    assert jid not in [row["jobId"] for row in client.get("/api/jobs").json()]
+    assert client.get(f"/api/jobs/{jid}").status_code == 404
+
+
+def test_delete_missing_job_404(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.delete("/api/jobs/nope-1234").status_code == 404

@@ -19,12 +19,26 @@ export async function getStatus(jobId) {
   return j(await fetch(`/api/jobs/${encodeURIComponent(jobId)}`));
 }
 
+export async function deleteJob(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+  return j(res);
+}
+
 export async function selectSeries(jobId, index) {
   return j(await fetch(`/api/jobs/${encodeURIComponent(jobId)}/series`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ seriesIndex: index }),
   }));
+}
+
+export async function createVariant(jobId, params) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/variants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return j(res);   // 기존 j(): 비정상 응답이면 throw
 }
 
 export function glbUrl(jobId, variantId) {

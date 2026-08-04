@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from mri2mesh.jobs.layout import JobPaths, job_paths, new_job_id
-from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
+from mri2mesh.jobs.pipeline import add_variant, ingest_job, run_segmentation_and_mesh
 from mri2mesh.jobs.status import (
     JobStatus,
     now_iso,
@@ -24,6 +25,8 @@ from mri2mesh.jobs.status import (
     record_error,
     write_status,
 )
+from mri2mesh.mesh import GenerateError
+from mri2mesh.mesh.params import parse_mesh_params
 
 _STATIC = Path(__file__).resolve().parent / "static"
 
@@ -206,6 +209,15 @@ def create_app(config: AppConfig) -> FastAPI:
             raise HTTPException(404, "job 없음")
         return _status_json(paths)
 
+    @app.delete("/api/jobs/{job_id}")
+    def delete_job(job_id: str) -> dict:
+        # _checked_job_paths가 job_id를 jobs_root 밑으로 가둔다(경로 조작 방지).
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        if not paths.status_file.is_file():
+            raise HTTPException(404, "job 없음")
+        shutil.rmtree(paths.root)
+        return {"deleted": job_id}
+
     @app.post("/api/jobs/{job_id}/series")
     def select_series(job_id: str, sel: SeriesSelection, bg: BackgroundTasks) -> dict:
         paths = _checked_job_paths(config.jobs_root, job_id)
@@ -248,6 +260,27 @@ def create_app(config: AppConfig) -> FastAPI:
 
         bg.add_task(work)
         return {"state": "running"}
+
+    @app.post("/api/jobs/{job_id}/variants")
+    def create_variant(job_id: str, payload: dict) -> dict:
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        if not paths.status_file.is_file():
+            raise HTTPException(404, "job 없음")
+        try:
+            params = parse_mesh_params(payload)
+        except ValueError:
+            # 메시지에 입력값을 되쏘지 않는다(PHI/안전)
+            raise HTTPException(400, "잘못된 메쉬 파라미터")
+        # 같은 잡에서 동시 생성이 순번을 겹치지 않게 잡별 lock으로 묶는다
+        lock = series_locks.setdefault(job_id, Lock())
+        with lock:
+            try:
+                return add_variant(paths, params)
+            except ValueError:
+                raise HTTPException(409, "done 잡에서만 변형을 생성할 수 있다")
+            except GenerateError:
+                # 예외 메시지에는 seg 경로가 섞일 수 있어(PHI) HTTP 본문엔 안 담는다
+                raise HTTPException(422, "메쉬를 생성하지 못했습니다")
 
     @app.get("/api/jobs/{job_id}/variants/{variant_id}/regions.glb")
     def glb(job_id: str, variant_id: str) -> FileResponse:
