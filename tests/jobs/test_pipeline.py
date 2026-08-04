@@ -11,10 +11,11 @@ import numpy as np
 
 import mri2mesh.jobs.pipeline as pipeline_mod
 from mri2mesh.jobs.layout import job_paths
-from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
+from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh, add_variant
 from mri2mesh.jobs.status import JobStatus, read_status, write_status
 from mri2mesh.labels import RemapError
 from mri2mesh.mesh import GenerateError, baseline_params
+from mri2mesh.mesh.params import parse_mesh_params
 from mri2mesh.segment import SEG_SOURCE_FILE
 
 
@@ -249,3 +250,34 @@ def test_initial_variant_uses_baseline_params(tmp_path):
     assert params["extractor"]["name"] == "vtk_contour_perlabel"
     # variantId 해시가 baseline 해시와 일치
     assert vid.endswith(baseline_params().param_hash())
+
+
+def test_add_variant_appends_new(tmp_path):
+    p = _done_paths(tmp_path)
+    before = len(json.loads(p.status_file.read_text("utf-8"))["variants"])
+    params = parse_mesh_params({"smoothing": {"method": "none"}})
+    res = add_variant(p, params)
+    assert res["deduped"] is False
+    status = json.loads(p.status_file.read_text("utf-8"))
+    assert len(status["variants"]) == before + 1
+    assert res["variantId"] in [v["variantId"] for v in status["variants"]]
+    assert (p.variant_dir(res["variantId"]) / "regions.glb").is_file()
+    assert (p.variant_dir(res["variantId"]) / "regions-meta.json").is_file()
+
+
+def test_add_variant_dedupes_by_param_hash(tmp_path):
+    p = _done_paths(tmp_path)
+    # baseline은 초기 v01과 같은 파라미터 → 중복
+    res = add_variant(p, baseline_params())
+    assert res["deduped"] is True
+    status = json.loads(p.status_file.read_text("utf-8"))
+    assert len(status["variants"]) == 1  # 늘지 않음
+
+
+def test_add_variant_rejects_non_done(tmp_path):
+    # ingest만 해 awaiting_series에 세운다(done 아님)
+    p = job_paths(tmp_path / "jobs", "jobA").create()
+    ingest_job(p, _t1_upload(tmp_path), "input.nii.gz")
+    import pytest
+    with pytest.raises(ValueError):
+        add_variant(p, baseline_params())
