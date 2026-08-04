@@ -161,6 +161,7 @@ def create_app(config: AppConfig) -> FastAPI:
             # 클라가 준 파일명·상대경로는 통째 버리고 번호로 평탄 저장한다. NAS
             # 긴 경로·하위폴더 동명 충돌·파일명 PHI·윈도우 MAX_PATH를 한 번에
             # 없앤다. DICOM 순서는 dcm2niix가 태그로 잡으므로 이름은 무의미하다.
+            orig_names = [f.filename or "" for f in files]
             saved = []
             for i, f in enumerate(files, start=1):
                 dst = paths.input_dir / f"{i:04d}"
@@ -171,7 +172,7 @@ def create_app(config: AppConfig) -> FastAPI:
             # input_dir 전체를 DICOM 폴더로 넘긴다(prepare_input이 디렉터리
             # 모드).
             src = saved[0] if len(saved) == 1 else paths.input_dir
-            ingest_job(paths, src, "<file>")
+            ingest_job(paths, src, "<file>", original_filenames=orig_names)
         except Exception as exc:  # noqa: BLE001
             record_error(paths, "io", None, str(exc))
         return {"jobId": job_id}
@@ -208,6 +209,14 @@ def create_app(config: AppConfig) -> FastAPI:
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
         return _status_json(paths)
+
+    @app.get("/api/jobs/{job_id}/dicom-meta")
+    def dicom_meta(job_id: str) -> FileResponse:
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        p = paths.dicom_meta_file
+        if not p.is_file():
+            raise HTTPException(404, "dicom-meta 없음")
+        return FileResponse(p, media_type="application/json")
 
     @app.delete("/api/jobs/{job_id}")
     def delete_job(job_id: str) -> dict:
