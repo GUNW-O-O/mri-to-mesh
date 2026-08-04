@@ -52,3 +52,47 @@ def read_dicom_header(path) -> dict:
     if not out:
         raise DicomMetaError("DICOM 헤더에서 읽을 element가 없다")
     return out
+
+
+def _nifti_geom(nifti_path) -> dict:
+    """NIfTI 파일에서 geometry (dims, voxelSizeMm, affine, dtype) 추출."""
+    import nibabel as nib
+    img = nib.load(Path(nifti_path))
+    zooms = [float(z) for z in img.header.get_zooms()[:3]]
+    return {
+        "dims": [int(d) for d in img.shape[:3]],
+        "voxelSizeMm": zooms,
+        "affine": [[float(x) for x in row] for row in img.affine],
+        "dtype": str(img.header.get_data_dtype()),
+    }
+
+
+def build_meta(source, original_filenames, dicom_file, nifti_path, sidecar) -> dict:
+    """§3 dicom-meta 계약 dict를 만든다. source: 'dicom' | 'nifti'.
+
+    source == 'nifti'면 before=None, removed=[], dicom_file은 무시.
+    removed = sorted(set(before) - set(sidecar))
+    """
+    sidecar = sidecar or {}
+    before = read_dicom_header(dicom_file) if source == "dicom" else None
+    removed = sorted(set(before) - set(sidecar)) if before is not None else []
+    return {
+        "source": source,
+        "originalFilenames": list(original_filenames or []),
+        "before": before,
+        "after": {"nifti": _nifti_geom(nifti_path), "sidecar": dict(sidecar)},
+        "removed": removed,
+    }
+
+
+def write_meta(path, meta) -> None:
+    """메타데이터를 JSON으로 원자적으로 저장 (tmp + os.replace)."""
+    path = Path(path)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def read_meta(path) -> dict:
+    """메타데이터 JSON을 읽는다."""
+    return json.loads(Path(path).read_text(encoding="utf-8"))

@@ -51,6 +51,10 @@ class JobPaths:
     def status_file(self) -> Path:
         return self.root / "status.json"
 
+    @property
+    def dicom_meta_file(self) -> Path:
+        return self.root / "dicom-meta.json"
+
     def variant_dir(self, variant_id: str) -> Path:
         return self.mesh_dir / variant_id
 
