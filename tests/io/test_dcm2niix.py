@@ -13,7 +13,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from seg_and_mesh.io.dcm2niix import (
+from mri2mesh.io.dcm2niix import (
     Dcm2niixError,
     SeriesOutput,
     describe_nifti,
@@ -329,7 +329,7 @@ def test_run_dcm2niix_ignores_non_nifti_name_containing_nii_substring(tmp_path, 
 @pytest.mark.realdata
 def test_run_dcm2niix_on_real_data(real_data_dir, dcm2niix_bin, tmp_path):
     """실제 DICOM 폴더/ZIP을 변환해 시리즈 목록이 나오는지 본다."""
-    from seg_and_mesh.io.ingest import prepare_input
+    from mri2mesh.io.ingest import prepare_input
 
     candidates = sorted(real_data_dir.rglob("*.zip")) or [real_data_dir]
     prepared = prepare_input(candidates[0], tmp_path / "work")
@@ -402,7 +402,7 @@ def test_output_without_sidecar_gets_name_from_filename(tmp_path):
     1101_32DIR_3mm_1NSA_ADC.nii.gz 에는 없다. 그대로 두면 이름 없는 항목이
     시리즈 목록에 뜬다(스펙 §6.3은 SeriesDescription 표시를 요구한다).
     """
-    from seg_and_mesh.io.dcm2niix import _collect_outputs
+    from mri2mesh.io.dcm2niix import _collect_outputs
 
     path = _write_nifti_shaped(
         tmp_path / "1101_32DIR_3mm_1NSA_ADC.nii.gz", (224, 224, 50), (1.0, 1.0, 3.0)
@@ -424,7 +424,7 @@ def test_sidecar_wins_over_filename(tmp_path):
     """
     import json
 
-    from seg_and_mesh.io.dcm2niix import _collect_outputs
+    from mri2mesh.io.dcm2niix import _collect_outputs
 
     path = _write_nifti_shaped(
         tmp_path / "401_T1W_SE_SAG.nii.gz", (512, 512, 24), (0.45, 0.45, 5.0)
@@ -446,7 +446,7 @@ def test_filename_without_leading_series_number(tmp_path):
     사용자가 직접 올린 NIfTI가 이 경로로 들어올 수 있다. 없는 번호를
     지어내면 안 된다.
     """
-    from seg_and_mesh.io.dcm2niix import _collect_outputs
+    from mri2mesh.io.dcm2niix import _collect_outputs
 
     path = _write_nifti_shaped(tmp_path / "input.nii.gz", (64, 64, 48), (1.0, 1.0, 1.0))
 

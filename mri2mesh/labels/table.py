@@ -14,7 +14,7 @@ from pathlib import Path
 #: 스펙 §2.2 regions-meta.json의 labelTable 필드에 그대로 들어간다.
 CANONICAL_VERSION = "canonical-v1"
 
-#: 저장소 루트의 labels/ 폴더. 이 파일은 seg_and_mesh/labels/table.py이므로
+#: 저장소 루트의 labels/ 폴더. 이 파일은 mri2mesh/labels/table.py이므로
 #: 두 단계 올라가면 루트다.
 _LABELS_DIR = Path(__file__).resolve().parents[2] / "labels"
 

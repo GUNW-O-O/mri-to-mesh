@@ -13,7 +13,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from seg_and_mesh.segment import (
+from mri2mesh.segment import (
     SEG_SOURCE_FILE,
     SegmentError,
     build_fastsurfer_command,
@@ -143,7 +143,7 @@ def test_run_writes_uint8_orig_and_locates_withcc_seg(tmp_path):
 
 def test_seg_source_feeds_remap_to_canonical(tmp_path):
     """세그 소스가 labels.remap의 입력이 된다 — end-to-end 연결 확인."""
-    from seg_and_mesh.labels import load_canonical, remap_segmentation
+    from mri2mesh.labels import load_canonical, remap_segmentation
 
     t1 = _write_t1(tmp_path)
     root = tmp_path / "out"

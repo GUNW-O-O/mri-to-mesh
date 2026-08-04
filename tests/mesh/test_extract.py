@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 import trimesh
 
-from seg_and_mesh.mesh import EXTRACTOR_NAMES, Preprocess
-from seg_and_mesh.mesh.extract import ExtractError, extract
-from seg_and_mesh.mesh.preprocess import apply_preprocess
+from mri2mesh.mesh import EXTRACTOR_NAMES, Preprocess
+from mri2mesh.mesh.extract import ExtractError, extract
+from mri2mesh.mesh.preprocess import apply_preprocess
 
 ANALYTIC_SPHERE_VOLUME = 4.0 / 3.0 * np.pi * 8.0**3  # ≈ 2144.66
 

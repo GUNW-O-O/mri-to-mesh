@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from seg_and_mesh.labels import (
+from mri2mesh.labels import (
     CANONICAL_VERSION,
     LabelTableError,
     load_canonical,

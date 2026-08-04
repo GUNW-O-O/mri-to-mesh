@@ -22,3 +22,4 @@ __pycache__/
 
 # 실제 MRI 테스트 데이터 (환자 데이터 — 공개 저장소에 절대 올리지 않는다)
 /test-asset/
+/output/

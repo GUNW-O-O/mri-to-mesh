@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from seg_and_mesh.jobs.layout import JobPaths, job_paths, new_job_id, to_host_path
+from mri2mesh.jobs.layout import JobPaths, job_paths, new_job_id, to_host_path
 
 
 def test_job_id_format():

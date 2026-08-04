@@ -11,13 +11,13 @@ import pytest
 
 @pytest.fixture
 def real_data_dir() -> Path:
-    """실제 MRI 테스트 데이터 폴더. 환경 변수 SAM_TEST_DATA_DIR로 지정한다."""
-    raw = os.environ.get("SAM_TEST_DATA_DIR")
+    """실제 MRI 테스트 데이터 폴더. 환경 변수 MRI2MESH_TEST_DATA_DIR로 지정한다."""
+    raw = os.environ.get("MRI2MESH_TEST_DATA_DIR")
     if not raw:
-        pytest.skip("SAM_TEST_DATA_DIR 미설정 — 실제 데이터 테스트를 건너뛴다")
+        pytest.skip("MRI2MESH_TEST_DATA_DIR 미설정 — 실제 데이터 테스트를 건너뛴다")
     path = Path(raw)
     if not path.is_dir():
-        pytest.skip(f"SAM_TEST_DATA_DIR가 폴더가 아니다: {path}")
+        pytest.skip(f"MRI2MESH_TEST_DATA_DIR가 폴더가 아니다: {path}")
     return path
 
 

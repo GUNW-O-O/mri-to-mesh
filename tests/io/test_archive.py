@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from seg_and_mesh.io.archive import (
+from mri2mesh.io.archive import (
     ExtractLimits,
     UnsafeArchiveError,
     decode_entry_name,

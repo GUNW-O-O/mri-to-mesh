@@ -33,16 +33,16 @@ WORKDIR /app
 COPY pyproject.toml uv.lock /app/
 RUN uv sync --frozen --no-install-project --no-dev
 
-COPY seg_and_mesh /app/seg_and_mesh
+COPY mri2mesh /app/mri2mesh
 # 런타임이 읽는 정적 라벨 표 (스펙 §3). 원본 LUT는 복사하지 않는다.
 COPY labels/canonical-v1.tsv /app/labels/canonical-v1.tsv
 # tests/는 서빙 이미지에 넣지 않는다 — 실행 코드가 아니다.
 RUN uv sync --frozen --no-dev
 
 # 컨테이너 안 잡 루트. compose가 여기에 호스트 OUTPUT_DIR을 바인드 마운트한다.
-ENV SAM_JOBS_ROOT=/work/jobs
+ENV MRI2MESH_JOBS_ROOT=/work/jobs
 # 0.0.0.0으로 바인드해야 컨테이너 밖(호스트)에서 접근 가능하다 — 컨테이너
 # 자신의 loopback은 호스트에서 안 보인다. 실제 외부 노출 차단은
 # docker-compose.yml의 "127.0.0.1:${WEB_PORT}:8000" 퍼블리시가 맡는다.
-CMD ["uv", "run", "--frozen", "uvicorn", "seg_and_mesh.web.server:app", \
+CMD ["uv", "run", "--frozen", "uvicorn", "mri2mesh.web.server:app", \
      "--host", "0.0.0.0", "--port", "8000"]

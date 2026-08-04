@@ -6,17 +6,17 @@ Windows 호스트에는 dcm2niix가 없다. `dcm2niix` 표시가 붙은 테스�
 
 ## 빌드
 
-    docker build -f docker/api.Dockerfile -t sam-api:dev .
+    docker build -f docker/api.Dockerfile -t mri2mesh-api:dev .
 
 ## 데이터 없이
 
-    docker run --rm sam-api:dev
+    docker run --rm mri2mesh-api:dev
 
 `realdata` 표시 테스트는 skip된다.
 
 ## 실데이터로
 
-    docker run --rm -v "C:\path\to\test-asset:/data:ro" -e SAM_TEST_DATA_DIR=/data sam-api:dev
+    docker run --rm -v "C:\path\to\test-asset:/data:ro" -e MRI2MESH_TEST_DATA_DIR=/data mri2mesh-api:dev
 
 `/data` 안에 같은 스터디의 DICOM 폴더 하나와 ZIP 하나가 있어야 한다.
 이 구성에서 skip이 0이 된다 — 스위트 전체가 실제로 실행되는 유일한 경로다.

@@ -14,7 +14,7 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-from seg_and_mesh.labels import CANONICAL_VERSION
+from mri2mesh.labels import CANONICAL_VERSION
 
 
 def build_regions_meta(

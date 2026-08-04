@@ -15,9 +15,9 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from seg_and_mesh.jobs.layout import JobPaths, job_paths, new_job_id
-from seg_and_mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
-from seg_and_mesh.jobs.status import (
+from mri2mesh.jobs.layout import JobPaths, job_paths, new_job_id
+from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
+from mri2mesh.jobs.status import (
     JobStatus,
     now_iso,
     read_status,
@@ -126,7 +126,7 @@ def _checked_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
 
 
 def create_app(config: AppConfig) -> FastAPI:
-    app = FastAPI(title="seg-and-mesh")
+    app = FastAPI(title="mri2mesh")
     config.jobs_root.mkdir(parents=True, exist_ok=True)
     series_locks: dict[str, Lock] = {}
 

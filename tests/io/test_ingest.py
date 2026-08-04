@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from seg_and_mesh.io.archive import UnsafeArchiveError
-from seg_and_mesh.io.ingest import (
+from mri2mesh.io.archive import UnsafeArchiveError
+from mri2mesh.io.ingest import (
     PreparedInput,
     SourceKind,
     UnsupportedInputError,
@@ -209,7 +209,7 @@ def test_symlink_cycle_does_not_hang_and_real_dicom_is_found(tmp_path):
 
 @pytest.mark.realdata
 def test_real_zip_yields_dicom_files(real_data_dir, tmp_path):
-    """SAM_TEST_DATA_DIR 안의 첫 ZIP을 실제로 정규화한다."""
+    """MRI2MESH_TEST_DATA_DIR 안의 첫 ZIP을 실제로 정규화한다."""
     zips = sorted(real_data_dir.rglob("*.zip"))
     if not zips:
         pytest.skip("테스트 데이터에 ZIP이 없다")

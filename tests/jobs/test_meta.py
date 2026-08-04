@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import nibabel as nib
 
-from seg_and_mesh.jobs.meta import build_regions_meta, write_regions_meta
+from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
 
 
 # 비대칭 affine — 전치·축스왑·2중 적용이 나면 값이 어긋나 테스트가 깨진다.

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from seg_and_mesh.io.dcm2niix import SeriesOutput
-from seg_and_mesh.io.series import rank_series, score_series
+from mri2mesh.io.dcm2niix import SeriesOutput
+from mri2mesh.io.series import rank_series, score_series
 
 
 def _series(
@@ -137,8 +137,8 @@ def test_real_data_ranking_puts_t1_first(real_data_dir, dcm2niix_bin, tmp_path):
     자동 확정은 하지 않으므로 이 테스트는 순위 출력이 목적이다. 1위가 T1이
     아니면 점수 가중치를 조정하고 회귀 케이스를 추가한다.
     """
-    from seg_and_mesh.io.dcm2niix import run_dcm2niix
-    from seg_and_mesh.io.ingest import prepare_input
+    from mri2mesh.io.dcm2niix import run_dcm2niix
+    from mri2mesh.io.ingest import prepare_input
 
     candidates = sorted(real_data_dir.rglob("*.zip")) or [real_data_dir]
     prepared = prepare_input(candidates[0], tmp_path / "work")

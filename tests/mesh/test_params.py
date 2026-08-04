@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from seg_and_mesh.mesh import (
+from mri2mesh.mesh import (
     Decimation,
     Extractor,
     MeshParams,

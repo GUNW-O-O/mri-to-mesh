@@ -16,7 +16,7 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-from seg_and_mesh.labels.table import CanonicalTable, load_canonical
+from mri2mesh.labels.table import CanonicalTable, load_canonical
 
 
 class RemapError(RuntimeError):

@@ -5,7 +5,7 @@ FastSurfer를 docker로 돌려 conform된 orig.nii.gz와 withCC 세그를 낸다
 downstream 별도 모듈이다.
 """
 
-from seg_and_mesh.segment.fastsurfer import (
+from mri2mesh.segment.fastsurfer import (
     SEG_SOURCE_FILE,
     SegmentError,
     SegmentResult,

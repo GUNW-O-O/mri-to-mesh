@@ -17,13 +17,13 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-from seg_and_mesh.labels import load_canonical
-from seg_and_mesh.mesh.extract import extract
-from seg_and_mesh.mesh.glb import write_glb
-from seg_and_mesh.mesh.metrics import region_metrics, summarize
-from seg_and_mesh.mesh.params import MeshParams
-from seg_and_mesh.mesh.postprocess import decimate, smooth
-from seg_and_mesh.mesh.preprocess import apply_preprocess
+from mri2mesh.labels import load_canonical
+from mri2mesh.mesh.extract import extract
+from mri2mesh.mesh.glb import write_glb
+from mri2mesh.mesh.metrics import region_metrics, summarize
+from mri2mesh.mesh.params import MeshParams
+from mri2mesh.mesh.postprocess import decimate, smooth
+from mri2mesh.mesh.preprocess import apply_preprocess
 
 
 class GenerateError(RuntimeError):
