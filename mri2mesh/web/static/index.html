@@ -35,10 +35,14 @@
   .bar > i { display: block; height: 100%; background: #fbbf24; }
 
   /* ---------- 메인 ---------- */
-  #main { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; }
+  /* pointer-events:none 으로 빈 영역 클릭·드래그를 뒤의 캔버스(OrbitControls)로
+     통과시킨다. 실제 UI(패널·뷰어패널)만 auto로 되살려 클릭을 받는다. 이게 없으면
+     투명한 #main 이 전 포인터 이벤트를 먹어 3D 회전이 안 된다. */
+  #main { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column;
+          pointer-events: none; }
 
   /* 상태 패널 공통 */
-  .panel { margin: auto; width: 560px; max-width: 90%; }
+  .panel { margin: auto; width: 560px; max-width: 90%; pointer-events: auto; }
   .panel h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
   .panel .sub { color: #888; font-size: 12px; margin-bottom: 18px; }
 
@@ -70,7 +74,8 @@
 
   /* 뷰어 패널 */
   #vpanel { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55);
-            padding: 12px; border-radius: 8px; font-size: 12px; width: 200px; }
+            padding: 12px; border-radius: 8px; font-size: 12px; width: 200px;
+            pointer-events: auto; }
   #vpanel label { display: block; margin: 3px 0; }
   #metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
              white-space: pre; }

@@ -161,6 +161,12 @@ function showViewer(s) {
 }
 
 // ---------- 업로드 모달 ----------
+// 문서 전체에서 브라우저 기본 드롭 동작을 막는다. 이게 없으면 파일이 #drop 존을
+// 조금이라도 벗어나 떨어질 때 브라우저가 그 파일로 네비게이트해(NIfTI가 그냥
+// 열리거나 다운로드됨) 업로드가 안 된다. #drop 자체 핸들러는 그대로 처리한다.
+addEventListener('dragover', (e) => e.preventDefault());
+addEventListener('drop', (e) => e.preventDefault());
+
 const overlay = document.getElementById('overlay');
 document.getElementById('new-job').onclick = () => overlay.classList.add('on');
 document.getElementById('upload-cancel').onclick = () => { overlay.classList.remove('on'); clearPicked(); };
