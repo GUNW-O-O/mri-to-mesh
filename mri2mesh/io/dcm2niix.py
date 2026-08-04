@@ -225,6 +225,30 @@ def _collect_outputs(nifti_paths: set[Path]) -> list[SeriesOutput]:
     return outputs
 
 
+def _dcm2niix_cmd(exe: str, depth: int, out_dir, dicom_dir) -> list[str]:
+    """dcm2niix 명령 줄을 만든다.
+
+    Args:
+        exe: dcm2niix 실행 파일 경로
+        depth: 재귀 탐색 깊이
+        out_dir: 출력 디렉터리
+        dicom_dir: DICOM 입력 디렉터리
+
+    Returns:
+        dcm2niix에 전달할 명령 줄 목록
+    """
+    return [
+        exe,
+        "-d", str(depth),
+        "-z", "y",
+        "-b", "y",
+        "-ba", "y",     # BIDS 사이드카 익명화 — 버전 기본값에 의존하지 않는다
+        "-f", _FILENAME_PATTERN,
+        "-o", str(out_dir),
+        str(dicom_dir),
+    ]
+
+
 def run_dcm2niix(
     dicom_dir: Path,
     out_dir: Path,
@@ -255,15 +279,7 @@ def run_dcm2niix(
     existing_files = _nifti_files(out_dir)
     exe = binary or find_dcm2niix()
 
-    cmd = [
-        exe,
-        "-d", str(depth),   # 재귀 탐색 깊이
-        "-z", "y",          # gzip 압축
-        "-b", "y",          # BIDS 사이드카 생성
-        "-f", _FILENAME_PATTERN,
-        "-o", str(out_dir),
-        str(dicom_dir),
-    ]
+    cmd = _dcm2niix_cmd(exe, depth, out_dir, dicom_dir)
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)

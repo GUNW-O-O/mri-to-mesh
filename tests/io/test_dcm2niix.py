@@ -16,6 +16,7 @@ import pytest
 from mri2mesh.io.dcm2niix import (
     Dcm2niixError,
     SeriesOutput,
+    _dcm2niix_cmd,
     describe_nifti,
     find_dcm2niix,
     run_dcm2niix,
@@ -28,6 +29,16 @@ def _write_nifti(path: Path, shape=(256, 256, 176), zooms=(1.0, 1.0, 1.0)) -> Pa
     img.header.set_zooms(zooms)
     nib.save(img, path)
     return path
+
+
+def test_cmd_includes_anonymize_bids():
+    """_dcm2niix_cmd가 -ba y(사이드카 익명화)를 포함해야 한다."""
+    cmd = _dcm2niix_cmd("dcm2niix", 5, "/out", "/in")
+    # -ba y 가 인접 쌍으로 있어야 한다
+    assert "-ba" in cmd
+    assert cmd[cmd.index("-ba") + 1] == "y"
+    # 기존 플래그도 유지
+    assert "-z" in cmd and "-b" in cmd
 
 
 def test_describe_nifti_reads_shape_and_zooms(tmp_path):
