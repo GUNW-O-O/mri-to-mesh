@@ -149,6 +149,20 @@ def _num(payload: dict, key: str, default, lo: float, hi: float):
     return v
 
 
+def _axis(payload: dict, key: str) -> dict:
+    """payload[key]를 축 dict로 읽는다.
+
+    없으면 {}(누락 축은 baseline로 채운다), dict면 그대로, dict가 아니면
+    ValueError(잘못된 요청 — 입력값은 메시지에 담지 않는다).
+    """
+    if key not in payload:
+        return {}
+    v = payload[key]
+    if not isinstance(v, dict):
+        raise ValueError(f"{key}: 객체가 아니다")
+    return v
+
+
 def parse_mesh_params(payload: dict) -> MeshParams:
     """요청 dict(camelCase) → MeshParams. 누락 축은 baseline, 위반은 ValueError.
 
@@ -156,11 +170,14 @@ def parse_mesh_params(payload: dict) -> MeshParams:
     """
     from mri2mesh.mesh.extract import EXTRACTOR_NAMES
 
+    if not isinstance(payload, dict):
+        raise ValueError("payload: 객체가 아니다")
+
     base = baseline_params()
     payload = payload or {}
 
     # preprocess
-    pre_in = payload.get("preprocess") or {}
+    pre_in = _axis(payload, "preprocess")
     pre_method = pre_in.get("method", base.preprocess.method)
     if pre_method not in ("none", "gaussian", "distance"):
         raise ValueError("preprocess.method 화이트리스트 위반")
@@ -170,14 +187,14 @@ def parse_mesh_params(payload: dict) -> MeshParams:
     )
 
     # extractor
-    ext_in = payload.get("extractor") or {}
+    ext_in = _axis(payload, "extractor")
     ext_name = ext_in.get("name", base.extractor.name)
     if ext_name not in EXTRACTOR_NAMES:
         raise ValueError("extractor.name 화이트리스트 위반")
     ext = Extractor(name=ext_name, options=())
 
     # smoothing
-    smo_in = payload.get("smoothing") or {}
+    smo_in = _axis(payload, "smoothing")
     smo_method = smo_in.get("method", base.smoothing.method)
     if smo_method not in ("none", "laplacian", "taubin", "humphrey"):
         raise ValueError("smoothing.method 화이트리스트 위반")
@@ -192,7 +209,7 @@ def parse_mesh_params(payload: dict) -> MeshParams:
     )
 
     # decimation
-    dec_in = payload.get("decimation") or {}
+    dec_in = _axis(payload, "decimation")
     dec_method = dec_in.get("method", base.decimation.method)
     if dec_method not in ("none", "quadric"):
         raise ValueError("decimation.method 화이트리스트 위반")

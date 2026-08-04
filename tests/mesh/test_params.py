@@ -122,3 +122,22 @@ def test_parse_rejects_out_of_range():
         parse_mesh_params({"minVoxel": 99999})
     with pytest.raises(ValueError):
         parse_mesh_params({"decimation": {"method": "quadric", "targetRatio": 5.0}})
+
+
+def test_parse_rejects_non_dict_axis():
+    """축이 존재하지만 dict가 아니면(예: 문자열) ValueError — AttributeError로
+    새 나가면 라우트에서 500이 된다(리뷰 발견 #1)."""
+    with pytest.raises(ValueError):
+        parse_mesh_params({"preprocess": "x"})
+    with pytest.raises(ValueError):
+        parse_mesh_params({"extractor": 5})
+    with pytest.raises(ValueError):
+        parse_mesh_params({"smoothing": [1, 2]})
+    with pytest.raises(ValueError):
+        parse_mesh_params({"decimation": "nope"})
+
+
+def test_parse_rejects_non_dict_payload():
+    """최상위 payload 자체가 dict가 아니어도 ValueError(500이 아니라)."""
+    with pytest.raises(ValueError):
+        parse_mesh_params("nope")

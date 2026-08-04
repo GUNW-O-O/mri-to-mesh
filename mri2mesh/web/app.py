@@ -25,6 +25,7 @@ from mri2mesh.jobs.status import (
     record_error,
     write_status,
 )
+from mri2mesh.mesh import GenerateError
 from mri2mesh.mesh.params import parse_mesh_params
 
 _STATIC = Path(__file__).resolve().parent / "static"
@@ -277,6 +278,9 @@ def create_app(config: AppConfig) -> FastAPI:
                 return add_variant(paths, params)
             except ValueError:
                 raise HTTPException(409, "done 잡에서만 변형을 생성할 수 있다")
+            except GenerateError:
+                # 예외 메시지에는 seg 경로가 섞일 수 있어(PHI) HTTP 본문엔 안 담는다
+                raise HTTPException(422, "메쉬를 생성하지 못했습니다")
 
     @app.get("/api/jobs/{job_id}/variants/{variant_id}/regions.glb")
     def glb(job_id: str, variant_id: str) -> FileResponse:

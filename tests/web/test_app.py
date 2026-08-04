@@ -473,6 +473,31 @@ def test_post_variant_rejects_bad_params(tmp_path):
     assert r.status_code == 400
 
 
+def test_post_variant_rejects_non_dict_axis(tmp_path):
+    """리뷰 발견 #1: 축이 dict가 아니면(.get이 AttributeError로 터지는 대신)
+    400이어야 한다(500이 아니라)."""
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={"preprocess": "x"})
+    assert r.status_code == 400
+
+
+def test_post_variant_generate_error_maps_to_422(tmp_path):
+    """리뷰 발견 #2: 파라미터가 유효해도 minVoxel이 모든 라벨을 걸러내
+    만들 메시가 없으면(GenerateError) 500이 아니라 422여야 한다.
+
+    목 세그의 라벨 17은 복셀 1000개(10*10*10)뿐이라 minVoxel을 그보다
+    크게 주면 유일한 라벨이 걸러져 GenerateError("만들 메시가 없다")가 난다.
+    """
+    client, holder = _client(tmp_path)
+    jid = _job_to_done(client, holder, tmp_path)
+    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 1001})
+    assert r.status_code == 422
+    # PHI: seg 경로 등 예외 원문이 본문에 안 새어 나가야 한다
+    assert "seg" not in r.text.lower()
+    assert ".nii" not in r.text
+
+
 def test_post_variant_rejects_non_done(tmp_path):
     client, _ = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
