@@ -10,6 +10,7 @@ from mri2mesh.mesh.params import (
     MeshParams,
     Preprocess,
     Smoothing,
+    baseline_params,
     default_params,
 )
 from mri2mesh.mesh.extract import EXTRACTOR_NAMES, ExtractError, extract
@@ -25,6 +26,7 @@ __all__ = [
     "MeshParams",
     "Preprocess",
     "Smoothing",
+    "baseline_params",
     "default_params",
     "apply_preprocess",
     "EXTRACTOR_NAMES",

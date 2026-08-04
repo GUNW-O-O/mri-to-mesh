@@ -8,6 +8,7 @@ from mri2mesh.mesh import (
     MeshParams,
     Preprocess,
     Smoothing,
+    baseline_params,
     default_params,
 )
 
@@ -77,3 +78,16 @@ def test_index_changes_prefix_not_hash():
     """순번은 접두만 바꾸고 해시는 파라미터에만 달렸다."""
     p = default_params()
     assert p.variant_id(1).split("-")[1] == p.variant_id(2).split("-")[1]
+
+
+def test_baseline_params_matches_production():
+    p = baseline_params()
+    assert p.preprocess.method == "none"
+    assert p.extractor.name == "vtk_contour_perlabel"
+    assert p.smoothing.method == "laplacian"
+    assert p.smoothing.iterations == 30
+    assert p.smoothing.relaxation == 0.1
+    assert p.decimation.method == "none"
+    assert p.min_voxel == 100
+    # 파라미터 해시가 안정적이어야 변형 중복 판정이 일관된다
+    assert p.variant_id(1) == f"v01-{p.param_hash()}"

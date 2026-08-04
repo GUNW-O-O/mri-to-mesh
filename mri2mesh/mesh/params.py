@@ -119,3 +119,19 @@ def default_params() -> MeshParams:
         smoothing=Smoothing(),
         decimation=Decimation(),
     )
+
+
+def baseline_params() -> MeshParams:
+    """현재 프로덕션(brainds nifti_pipeline/mesh_export.py) 기본값.
+
+    이진 마스크에 vtkContourFilter(0.5) → vtkSmoothPolyDataFilter(iter 30,
+    relax 0.1). default_params()와 다르다 — 폼·엔드포인트·파이프라인 초기
+    변형의 기준선은 이쪽이다.
+    """
+    return MeshParams(
+        preprocess=Preprocess(method="none"),
+        extractor=Extractor(name="vtk_contour_perlabel"),
+        smoothing=Smoothing(method="laplacian", iterations=30, relaxation=0.1),
+        decimation=Decimation(method="none"),
+        min_voxel=100,
+    )
