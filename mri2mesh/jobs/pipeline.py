@@ -9,11 +9,13 @@ io → (게이트) → segment → remap → mesh를 순서대로 호출하고 s
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
 from mri2mesh.io import (
     Dcm2niixError,
+    SourceKind,
     UnsafeArchiveError,
     UnsupportedInputError,
     describe_nifti,
@@ -21,6 +23,7 @@ from mri2mesh.io import (
     rank_series,
     run_dcm2niix,
 )
+from mri2mesh.io.dicom_meta import DicomMetaError, build_meta, write_meta
 from mri2mesh.jobs.layout import JobPaths, to_host_path
 from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
 from mri2mesh.jobs.status import (
@@ -33,6 +36,16 @@ from mri2mesh.jobs.status import (
 from mri2mesh.labels import RemapError, load_canonical, remap_segmentation
 from mri2mesh.mesh import GenerateError, baseline_params, generate_variant
 from mri2mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
+
+
+def _load_sidecar_dict(sidecar_path) -> dict:
+    """사이드카 JSON을 dict로 로드한다. 없거나 오류면 {}."""
+    if sidecar_path is None:
+        return {}
+    try:
+        return json.loads(Path(sidecar_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 def _series_dict(candidate) -> dict:
@@ -48,13 +61,14 @@ def _series_dict(candidate) -> dict:
     }
 
 
-def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=None) -> JobStatus:
+def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=None, original_filenames=None) -> JobStatus:
     """io 단계. 랭킹 후 awaiting_series로 멈춘다(스펙 §6.3 게이트).
 
     dcm2niix_runner: 지금은 받기만 하고 안 쓴다 — io.run_dcm2niix에는 주입
         가능한 runner 인자가 없다(binary 교체만 지원). 나중에 그 인자가
         생기면 여기서 이어준다. 호출자는 이 값이 지금 dcm2niix 실행을
         가로채지 않는다는 걸 알아야 한다.
+    original_filenames: 익명화 감사를 위한 원본 파일명 목록(dicom-meta.json용).
     """
     # io 실패도(스펙 §12) record_error를 거쳐야 한다 — 그래야 status.json이
     # "running"에 멈춰 있지 않고, 원본 경로가 섞인 예외 메시지가
@@ -90,6 +104,25 @@ def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=Non
     except (Dcm2niixError, UnsupportedInputError, UnsafeArchiveError) as exc:
         record_error(paths, "io", None, str(exc))
         return read_status(paths)
+
+    # dicom-meta (익명화 감사) — 부가기능이므로 실패해도 파이프라인을 막지 않는다.
+    try:
+        if prepared.nifti_file is not None:
+            _meta = build_meta(
+                source="nifti", original_filenames=original_filenames,
+                dicom_file=None, nifti_path=prepared.nifti_file, sidecar=None,
+            )
+        else:
+            rep = ranked[0].series
+            _meta = build_meta(
+                source="dicom", original_filenames=original_filenames,
+                dicom_file=prepared.dicom_files[0],
+                nifti_path=rep.nifti_path,
+                sidecar=_load_sidecar_dict(rep.sidecar_path),
+            )
+        write_meta(paths.dicom_meta_file, _meta)
+    except (DicomMetaError, OSError, IndexError):
+        pass  # 감사 메타 없이 진행
 
     status = read_status(paths)
     status.state = "awaiting_series"

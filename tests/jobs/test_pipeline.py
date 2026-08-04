@@ -10,6 +10,7 @@ import nibabel as nib
 import numpy as np
 
 import mri2mesh.jobs.pipeline as pipeline_mod
+from mri2mesh.io.dicom_meta import read_meta
 from mri2mesh.jobs.layout import job_paths
 from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh, add_variant
 from mri2mesh.jobs.status import JobStatus, read_status, write_status
@@ -60,6 +61,20 @@ def test_ingest_preserves_existing_case_name(tmp_path):
 
     assert status.case_name == "라벨X"
     assert read_status(p).case_name == "라벨X"
+
+
+def test_ingest_nifti_writes_meta_without_before(tmp_path):
+    """ingest_job이 original_filenames를 받아 dicom-meta.json을 생성한다.
+
+    NIfTI 직접 입력이므로 before=None, source='nifti'."""
+    p = job_paths(tmp_path / "jobs", "jobM").create()
+    ingest_job(p, _t1_upload(tmp_path), "input.nii.gz",
+               original_filenames=["scan.nii.gz"])
+    meta = read_meta(p.dicom_meta_file)
+    assert meta["source"] == "nifti"
+    assert meta["before"] is None
+    assert meta["originalFilenames"] == ["scan.nii.gz"]
+    assert meta["after"]["nifti"]["dims"][0] > 0
 
 
 def _fastsurfer_mock(subject_dir_root, sid):
