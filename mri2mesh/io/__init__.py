@@ -4,27 +4,27 @@
 로컬에서 전 구간 테스트된다.
 """
 
-from seg_and_mesh.io.archive import (
+from mri2mesh.io.archive import (
     ExtractLimits,
     ExtractResult,
     UnsafeArchiveError,
     safe_extract,
 )
-from seg_and_mesh.io.dcm2niix import (
+from mri2mesh.io.dcm2niix import (
     Dcm2niixError,
     SeriesOutput,
     describe_nifti,
     find_dcm2niix,
     run_dcm2niix,
 )
-from seg_and_mesh.io.detect import InputKind, detect_format
-from seg_and_mesh.io.ingest import (
+from mri2mesh.io.detect import InputKind, detect_format
+from mri2mesh.io.ingest import (
     PreparedInput,
     SourceKind,
     UnsupportedInputError,
     prepare_input,
 )
-from seg_and_mesh.io.series import SeriesCandidate, rank_series, score_series
+from mri2mesh.io.series import SeriesCandidate, rank_series, score_series
 
 __all__ = [
     # detect

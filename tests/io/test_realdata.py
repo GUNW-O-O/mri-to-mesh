@@ -1,6 +1,6 @@
 """실제 MRI 스터디 회귀 테스트.
 
-SAM_TEST_DATA_DIR이 가리키는 폴더에 같은 스터디의 DICOM 폴더 하나와 ZIP
+MRI2MESH_TEST_DATA_DIR이 가리키는 폴더에 같은 스터디의 DICOM 폴더 하나와 ZIP
 하나가 있다고 본다. 파일명에 환자 식별자가 들어 있을 수 있으므로 어떤
 이름도 이 파일에 적지 않는다 — 레이아웃을 찾아서 쓴다.
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from seg_and_mesh.io import (
+from mri2mesh.io import (
     SourceKind,
     prepare_input,
     rank_series,
@@ -28,7 +28,7 @@ def study_dir(real_data_dir: Path) -> Path:
     """스터디 DICOM이 든 폴더 하나."""
     subdirs = [p for p in sorted(real_data_dir.iterdir()) if p.is_dir()]
     if not subdirs:
-        pytest.skip(f"SAM_TEST_DATA_DIR 안에 하위 폴더가 없다: {real_data_dir}")
+        pytest.skip(f"MRI2MESH_TEST_DATA_DIR 안에 하위 폴더가 없다: {real_data_dir}")
     return subdirs[0]
 
 
@@ -37,7 +37,7 @@ def study_zip(real_data_dir: Path) -> Path:
     """같은 스터디를 담은 ZIP 하나."""
     zips = sorted(real_data_dir.glob("*.zip"))
     if not zips:
-        pytest.skip(f"SAM_TEST_DATA_DIR 안에 .zip이 없다: {real_data_dir}")
+        pytest.skip(f"MRI2MESH_TEST_DATA_DIR 안에 .zip이 없다: {real_data_dir}")
     return zips[0]
 
 
@@ -85,7 +85,7 @@ def test_conversion_and_ranking_pick_a_3d_t1(study_dir, tmp_path, dcm2niix_bin):
     특정 시리즈 이름을 단언하지 않는다 — 데이터가 바뀌어도 의미가 유지되게
     성질로 단언한다.
     """
-    from seg_and_mesh.io.series import T1_DESCRIPTION_PATTERN
+    from mri2mesh.io.series import T1_DESCRIPTION_PATTERN
 
     outputs = run_dcm2niix(study_dir, tmp_path / "nifti", binary=dcm2niix_bin)
     assert len(outputs) > 1, "시리즈가 하나뿐이면 순위를 검증할 수 없다"

@@ -12,8 +12,8 @@ import nibabel as nib
 import numpy as np
 from fastapi.testclient import TestClient
 
-from seg_and_mesh.segment import SEG_SOURCE_FILE
-from seg_and_mesh.web.app import AppConfig, create_app
+from mri2mesh.segment import SEG_SOURCE_FILE
+from mri2mesh.web.app import AppConfig, create_app
 
 
 def _nifti_bytes():

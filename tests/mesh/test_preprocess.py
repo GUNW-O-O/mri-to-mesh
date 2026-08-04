@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from seg_and_mesh.mesh import Preprocess
-from seg_and_mesh.mesh.preprocess import apply_preprocess
+from mri2mesh.mesh import Preprocess
+from mri2mesh.mesh.preprocess import apply_preprocess
 
 
 def test_none_returns_binary_field_at_half_level(sphere_mask):

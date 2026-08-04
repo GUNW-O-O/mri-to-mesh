@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from seg_and_mesh.io.dcm2niix import SeriesOutput
+from mri2mesh.io.dcm2niix import SeriesOutput
 
 #: T1 계열 시퀀스 이름 (스펙 §6.3)
 T1_DESCRIPTION_PATTERN = re.compile(r"mprage|t1|bravo|spgr|tfl", re.IGNORECASE)

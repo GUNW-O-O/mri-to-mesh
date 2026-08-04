@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from seg_and_mesh.io.archive import ExtractLimits, safe_extract
-from seg_and_mesh.io.detect import InputKind, detect_format
+from mri2mesh.io.archive import ExtractLimits, safe_extract
+from mri2mesh.io.detect import InputKind, detect_format
 
 #: ZIP 전개 결과를 두는 workdir 하위 폴더명
 _EXTRACT_DIRNAME = "extracted"

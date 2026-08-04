@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from pydicom.dataset import Dataset
 
-from seg_and_mesh.io.detect import InputKind, detect_format
+from mri2mesh.io.detect import InputKind, detect_format
 
 
 def _nifti1_bytes(endian: str = "<", magic: bytes = b"n+1\x00") -> bytes:
@@ -153,7 +153,7 @@ def test_input_kind_nifti_shares_value_with_source_kind_but_is_distinct_type():
     서로 다른 str Enum이다. == 비교는 True이지만 is 비교는 False다 — 두 값을
     혼동하지 않도록 현재 동작을 고정해 둔다.
     """
-    from seg_and_mesh.io.ingest import SourceKind
+    from mri2mesh.io.ingest import SourceKind
 
     assert InputKind.NIFTI == SourceKind.NIFTI
     assert InputKind.NIFTI is not SourceKind.NIFTI
@@ -236,7 +236,7 @@ def test_fallback_reads_only_the_three_decision_tags(tmp_path, monkeypatch):
 
 @pytest.mark.realdata
 def test_real_data_files_are_all_recognized(real_data_dir):
-    """SAM_TEST_DATA_DIR 안의 파일이 ZIP/NIfTI/DICOM 중 하나로 판별되는지 본다.
+    """MRI2MESH_TEST_DATA_DIR 안의 파일이 ZIP/NIfTI/DICOM 중 하나로 판별되는지 본다.
 
     UNKNOWN이 나온 파일 목록을 그대로 보여준다. 진짜 잡파일(readme 등)이면
     무시하고, DICOM인데 UNKNOWN이면 판별 로직에 구멍이 있다는 뜻이다.

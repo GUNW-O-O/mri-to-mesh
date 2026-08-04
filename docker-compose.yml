@@ -9,10 +9,10 @@ services:
     environment:
       FASTSURFER_IMAGE: ${FASTSURFER_IMAGE}
       FASTSURFER_THREADS: ${FASTSURFER_THREADS:-8}
-      SAM_JOBS_ROOT: /work/jobs
+      MRI2MESH_JOBS_ROOT: /work/jobs
       # 형제 FastSurfer 컨테이너의 -v 인자에 쓸 호스트 경로 (Task 1 to_host_path).
       # 도커 데몬은 호스트에 있어 api 내부의 /work/jobs를 모른다.
-      SAM_HOST_JOBS_ROOT: ${OUTPUT_DIR}
+      MRI2MESH_HOST_JOBS_ROOT: ${OUTPUT_DIR}
     volumes:
       # 형제 FastSurfer 컨테이너를 띄우기 위한 docker socket (스펙 §5.1)
       - /var/run/docker.sock:/var/run/docker.sock

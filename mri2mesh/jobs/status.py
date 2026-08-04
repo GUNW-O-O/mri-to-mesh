@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from seg_and_mesh.jobs.layout import JobPaths
+from mri2mesh.jobs.layout import JobPaths
 
 STATES = ("awaiting_series", "running", "done", "error")
 

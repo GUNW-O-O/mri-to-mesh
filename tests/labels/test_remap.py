@@ -6,7 +6,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from seg_and_mesh.labels import (
+from mri2mesh.labels import (
     RemapError,
     build_lookup,
     load_canonical,

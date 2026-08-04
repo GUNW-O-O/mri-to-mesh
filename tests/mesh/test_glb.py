@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 import trimesh
 
-from seg_and_mesh.mesh import Preprocess
-from seg_and_mesh.mesh.extract import extract
-from seg_and_mesh.mesh.glb import GlbError, write_glb
-from seg_and_mesh.mesh.preprocess import apply_preprocess
+from mri2mesh.mesh import Preprocess
+from mri2mesh.mesh.extract import extract
+from mri2mesh.mesh.glb import GlbError, write_glb
+from mri2mesh.mesh.preprocess import apply_preprocess
 
 
 def _sphere(sphere_mask):

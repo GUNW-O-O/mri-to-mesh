@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 import trimesh
 
-from seg_and_mesh.mesh import Decimation, Preprocess, Smoothing
-from seg_and_mesh.mesh.extract import extract
-from seg_and_mesh.mesh.postprocess import PostprocessError, decimate, smooth
-from seg_and_mesh.mesh.preprocess import apply_preprocess
+from mri2mesh.mesh import Decimation, Preprocess, Smoothing
+from mri2mesh.mesh.extract import extract
+from mri2mesh.mesh.postprocess import PostprocessError, decimate, smooth
+from mri2mesh.mesh.preprocess import apply_preprocess
 
 
 def _sphere_mesh(sphere_mask):

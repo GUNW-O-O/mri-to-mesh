@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import trimesh
 
-from seg_and_mesh.mesh import (
+from mri2mesh.mesh import (
     Decimation,
     Extractor,
     MeshParams,
@@ -16,7 +16,7 @@ from seg_and_mesh.mesh import (
     Smoothing,
     default_params,
 )
-from seg_and_mesh.mesh.generate import GenerateError, generate_variant
+from mri2mesh.mesh.generate import GenerateError, generate_variant
 
 
 def test_generate_writes_all_variant_files(tmp_path, synthetic_seg):

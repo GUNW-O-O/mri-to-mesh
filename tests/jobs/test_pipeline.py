@@ -9,13 +9,13 @@ from types import SimpleNamespace
 import nibabel as nib
 import numpy as np
 
-import seg_and_mesh.jobs.pipeline as pipeline_mod
-from seg_and_mesh.jobs.layout import job_paths
-from seg_and_mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
-from seg_and_mesh.jobs.status import JobStatus, read_status, write_status
-from seg_and_mesh.labels import RemapError
-from seg_and_mesh.mesh import GenerateError
-from seg_and_mesh.segment import SEG_SOURCE_FILE
+import mri2mesh.jobs.pipeline as pipeline_mod
+from mri2mesh.jobs.layout import job_paths
+from mri2mesh.jobs.pipeline import ingest_job, run_segmentation_and_mesh
+from mri2mesh.jobs.status import JobStatus, read_status, write_status
+from mri2mesh.labels import RemapError
+from mri2mesh.mesh import GenerateError
+from mri2mesh.segment import SEG_SOURCE_FILE
 
 
 def _nifti(path, value_map=None, shape=(16, 16, 16), zooms=(1.0, 1.0, 1.0)):

@@ -12,7 +12,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from seg_and_mesh.io import (
+from mri2mesh.io import (
     Dcm2niixError,
     UnsafeArchiveError,
     UnsupportedInputError,
@@ -21,18 +21,18 @@ from seg_and_mesh.io import (
     rank_series,
     run_dcm2niix,
 )
-from seg_and_mesh.jobs.layout import JobPaths, to_host_path
-from seg_and_mesh.jobs.meta import build_regions_meta, write_regions_meta
-from seg_and_mesh.jobs.status import (
+from mri2mesh.jobs.layout import JobPaths, to_host_path
+from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
+from mri2mesh.jobs.status import (
     JobStatus,
     now_iso,
     read_status,
     record_error,
     write_status,
 )
-from seg_and_mesh.labels import RemapError, load_canonical, remap_segmentation
-from seg_and_mesh.mesh import GenerateError, default_params, generate_variant
-from seg_and_mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
+from mri2mesh.labels import RemapError, load_canonical, remap_segmentation
+from mri2mesh.mesh import GenerateError, default_params, generate_variant
+from mri2mesh.segment import SEG_SOURCE_FILE, SegmentError, run_fastsurfer
 
 
 def _series_dict(candidate) -> dict:

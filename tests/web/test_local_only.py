@@ -12,7 +12,7 @@ new WebSocket()·WebSocket()/navigator.sendBeacon()/importScripts())의
 import re
 from pathlib import Path
 
-_STATIC = Path(__file__).resolve().parents[2] / "seg_and_mesh" / "web" / "static"
+_STATIC = Path(__file__).resolve().parents[2] / "mri2mesh" / "web" / "static"
 
 # ---- 1) 주석 제거 전처리 ---------------------------------------------------
 # 문자열 리터럴을 먼저 인식해 보존해야 한다. 안 그러면 'https://x' 안의

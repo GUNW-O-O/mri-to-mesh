@@ -3,7 +3,7 @@
 뒤 계획(jobs/, web/)은 이 이름들만 쓴다. 내부 모듈 경로에 묶이지 않게 한다.
 """
 
-import seg_and_mesh.io as sam_io
+import mri2mesh.io as sam_io
 
 EXPECTED = {
     "InputKind",

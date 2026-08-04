@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from seg_and_mesh.jobs.layout import job_paths
-from seg_and_mesh.jobs.status import (
+from mri2mesh.jobs.layout import job_paths
+from mri2mesh.jobs.status import (
     JobStatus,
     read_status,
     record_error,
