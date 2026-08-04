@@ -135,3 +135,73 @@ def baseline_params() -> MeshParams:
         decimation=Decimation(method="none"),
         min_voxel=100,
     )
+
+
+def _num(payload: dict, key: str, default, lo: float, hi: float):
+    """camelCase 키에서 수치를 읽고 [lo, hi]로 검증. 없으면 default."""
+    if key not in payload:
+        return default
+    v = payload[key]
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        raise ValueError(f"{key}: 숫자가 아니다")
+    if not (lo <= v <= hi):
+        raise ValueError(f"{key}: 범위를 벗어났다")
+    return v
+
+
+def parse_mesh_params(payload: dict) -> MeshParams:
+    """요청 dict(camelCase) → MeshParams. 누락 축은 baseline, 위반은 ValueError.
+
+    메시지에 입력값을 그대로 넣지 않는다(PHI/로깅 안전).
+    """
+    from mri2mesh.mesh.extract import EXTRACTOR_NAMES
+
+    base = baseline_params()
+    payload = payload or {}
+
+    # preprocess
+    pre_in = payload.get("preprocess") or {}
+    pre_method = pre_in.get("method", base.preprocess.method)
+    if pre_method not in ("none", "gaussian", "distance"):
+        raise ValueError("preprocess.method 화이트리스트 위반")
+    pre = Preprocess(
+        method=pre_method,
+        sigma_vox=_num(pre_in, "sigmaVox", base.preprocess.sigma_vox, 0.1, 2.0),
+    )
+
+    # extractor
+    ext_in = payload.get("extractor") or {}
+    ext_name = ext_in.get("name", base.extractor.name)
+    if ext_name not in EXTRACTOR_NAMES:
+        raise ValueError("extractor.name 화이트리스트 위반")
+    ext = Extractor(name=ext_name, options=())
+
+    # smoothing
+    smo_in = payload.get("smoothing") or {}
+    smo_method = smo_in.get("method", base.smoothing.method)
+    if smo_method not in ("none", "laplacian", "taubin", "humphrey"):
+        raise ValueError("smoothing.method 화이트리스트 위반")
+    smo = Smoothing(
+        method=smo_method,
+        iterations=int(_num(smo_in, "iterations", base.smoothing.iterations, 0, 100)),
+        pass_band=_num(smo_in, "passBand", base.smoothing.pass_band, 0.0, 1.0),
+        feature_angle=_num(smo_in, "featureAngle", base.smoothing.feature_angle, 0.0, 180.0),
+        relaxation=_num(smo_in, "relaxation", base.smoothing.relaxation, 0.0, 1.0),
+        alpha=_num(smo_in, "alpha", base.smoothing.alpha, 0.0, 1.0),
+        beta=_num(smo_in, "beta", base.smoothing.beta, 0.0, 1.0),
+    )
+
+    # decimation
+    dec_in = payload.get("decimation") or {}
+    dec_method = dec_in.get("method", base.decimation.method)
+    if dec_method not in ("none", "quadric"):
+        raise ValueError("decimation.method 화이트리스트 위반")
+    dec = Decimation(
+        method=dec_method,
+        target_ratio=_num(dec_in, "targetRatio", base.decimation.target_ratio, 0.05, 1.0),
+    )
+
+    return MeshParams(
+        preprocess=pre, extractor=ext, smoothing=smo, decimation=dec,
+        min_voxel=int(_num(payload, "minVoxel", base.min_voxel, 0, 5000)),
+    )

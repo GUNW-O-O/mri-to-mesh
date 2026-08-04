@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mri2mesh.mesh import (
     Decimation,
     Extractor,
@@ -11,6 +13,7 @@ from mri2mesh.mesh import (
     baseline_params,
     default_params,
 )
+from mri2mesh.mesh.params import parse_mesh_params
 
 
 def test_default_params_are_conservative():
@@ -91,3 +94,31 @@ def test_baseline_params_matches_production():
     assert p.min_voxel == 100
     # 파라미터 해시가 안정적이어야 변형 중복 판정이 일관된다
     assert p.variant_id(1) == f"v01-{p.param_hash()}"
+
+
+def test_parse_fills_missing_axes_from_baseline():
+    p = parse_mesh_params({"smoothing": {"method": "taubin", "iterations": 10,
+                                         "passBand": 0.2, "featureAngle": 45}})
+    # 준 축은 반영
+    assert p.smoothing.method == "taubin"
+    assert p.smoothing.iterations == 10
+    # 안 준 축은 baseline
+    assert p.extractor.name == baseline_params().extractor.name
+    assert p.min_voxel == 100
+
+
+def test_parse_rejects_unknown_method():
+    with pytest.raises(ValueError):
+        parse_mesh_params({"smoothing": {"method": "wobble"}})
+
+
+def test_parse_rejects_unknown_extractor():
+    with pytest.raises(ValueError):
+        parse_mesh_params({"extractor": {"name": "not_a_real_extractor"}})
+
+
+def test_parse_rejects_out_of_range():
+    with pytest.raises(ValueError):
+        parse_mesh_params({"minVoxel": 99999})
+    with pytest.raises(ValueError):
+        parse_mesh_params({"decimation": {"method": "quadric", "targetRatio": 5.0}})
