@@ -8,7 +8,7 @@ test-asset/
 work/
 out/
 labels/FreeSurferColorLUT.txt
-# 루트에만 앵커(선행 슬래시) — seg_and_mesh/web/static/vendor(vendor한 three.js,
+# 루트에만 앵커(선행 슬래시) — mri2mesh/web/static/vendor(vendor한 three.js,
 # git 추적 대상)까지 지워지면 컨테이너 안 뷰어가 깨진다. 이건 미사용 원본
 # 다운로드 캐시 디렉터리(.gitignore의 /vendor/)만 가리켜야 한다.
 /vendor/
