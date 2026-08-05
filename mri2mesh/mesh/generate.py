@@ -30,6 +30,19 @@ class GenerateError(RuntimeError):
     """세그를 읽지 못했거나 변형 생성에 실패했다."""
 
 
+def _ras_to_gltf_yup(verts: np.ndarray) -> np.ndarray:
+    """NIfTI RAS world 좌표를 glTF 표준 Y-up으로 변환.
+
+    RAS는 (x,y,z)=(right, anterior, superior)로 Z가 위(superior)다. 하지만
+    glTF/three.js 표준은 Y-up이다 — 그래픽으로 반출하는 경계에서 한 번 변환해야
+    소비 측(brain-educate 등)이 회전 보정 없이 똑바로 본다.
+    (x,y,z) → (x, z, -y): right는 그대로, superior(+Z)→위(+Y), anterior(+Y)→
+    -Z(posterior가 +Z). GLB 정점과 regions-meta centroid가 같은 프레임이 되도록
+    centroid 계산 전에 적용한다.
+    """
+    return np.column_stack([verts[:, 0], verts[:, 2], -verts[:, 1]])
+
+
 @dataclass(frozen=True)
 class VariantResult:
     variant_id: str
@@ -100,6 +113,8 @@ def generate_variant(seg_path, out_dir, params: MeshParams, index: int = 1, tabl
 
         # affine 한 번만 적용 -> world mm (스펙 §6.7, 이중 스케일 금지)
         verts_world = verts_vox @ R.T + t
+        # 그래픽 반출 경계에서 RAS(Z-up) → glTF 표준 Y-up으로 한 번 변환한다.
+        verts_world = _ras_to_gltf_yup(verts_world)
 
         meshes[label_id] = (verts_world, faces)
         total_vertices += len(verts_world)

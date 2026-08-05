@@ -2,7 +2,9 @@
 
 trimesh로 직접 쓴다 — 렌더러 씬 export(pyvista.Plotter.export_gltf)는 조명·
 카메라를 함께 싣고 압축이 없어 파일이 커진다. 노드명을 label_<id>로 확정하고
-색을 굽지 않는다(색은 regions-meta.json이 운반, B안). 정점은 이미 world mm다.
+색을 굽지 않는다(색은 regions-meta.json이 운반, B안). 정점은 이미 world mm이고
+glTF 표준 Y-up 좌표다(generate._ras_to_gltf_yup에서 RAS→Y-up 변환 완료) — 여기선
+그대로 쓴다. 좌표계: Y=up(superior), X=right, Z=posterior.
 """
 
 from __future__ import annotations

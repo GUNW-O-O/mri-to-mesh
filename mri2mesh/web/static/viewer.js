@@ -138,12 +138,12 @@ export class Viewer {
       meshes.push(o);
     });
 
-    // 업라이트: RAS(+Z=상하)를 three.js up(+Y)에 맞춰 세운다(-90° about X).
+    // GLB가 이미 glTF 표준 Y-up으로 구워져 나온다(generate._ras_to_gltf_yup) —
+    // 여기서 축 보정을 하지 않는다. y=up, x·z가 수평.
     const root = new THREE.Group();
-    root.rotation.x = -Math.PI / 2;
     root.add(inner);
     const size = box.getSize(new THREE.Vector3());
-    root.userData.width = Math.max(size.x, size.z);   // 회전 후 가로폭(x·z)
+    root.userData.width = Math.max(size.x, size.z);   // 수평 footprint(x·z)
     root.userData.radius = Math.max(size.x, size.y, size.z);
 
     return { variantId, root, meta, meshes, visible: true };
