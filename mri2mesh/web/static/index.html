@@ -91,6 +91,8 @@
              white-space: pre; }
   #vpanel .slider-row { display: block; margin-top: 8px; font-size: 12px; }
   #vpanel #bigbang { width: 100%; margin-top: 4px; }
+  .opt-subtitle { font-size: 11px; color: #99a; margin: 10px 0 4px; font-weight: 600; }
+  #groups label { display: block; margin: 3px 0; font-size: 12px; }
 
   /* 하단 변형 토글 바 */
   #variant-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
@@ -178,6 +180,8 @@
     <label class="slider-row">빅뱅 (explode)
       <input type="range" id="bigbang" min="0" max="1" step="0.02" value="0">
     </label>
+    <div class="opt-subtitle">영역 (group / side)</div>
+    <div id="groups"></div>
     <div id="metrics"></div>
     <div id="mesh-options">
       <div class="opt-title">비교 변형 생성</div>
