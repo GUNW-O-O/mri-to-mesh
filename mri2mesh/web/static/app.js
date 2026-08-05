@@ -106,6 +106,7 @@ function showStage(state) {
   const map = { empty:'stage-empty', awaiting_series:'stage-select', running:'stage-progress', error:'stage-error' };
   for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
     document.getElementById(id).style.display = 'none';
+  if (state !== 'running') clearInterval(progressTimer);   // 진행 이탈 시 경과 틱 정지
   document.getElementById('vpanel').style.display = state==='done' ? 'block' : 'none';
   if (state !== 'done') {
     viewer.clear();
@@ -179,7 +180,18 @@ function renderSelect(s) {
 }
 
 // ---------- 진행률 ----------
+// 경과 초를 "M:SS"(1시간 넘으면 "H:MM:SS")로.
+function fmtElapsed(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const s = sec % 60, m = Math.floor(sec / 60) % 60, h = Math.floor(sec / 3600);
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+let progressTimer = null;   // 경과 시간 라이브 틱(폴링과 별개로 매초 갱신)
+
 function renderProgress(s) {
+  clearInterval(progressTimer);
   const order = ['io','segment','remap','mesh'];
   const cur = order.indexOf(s.step);
   const el = document.getElementById('stage-progress');
@@ -187,8 +199,27 @@ function renderProgress(s) {
     ['업로드·dcm2niix','세그멘테이션','라벨 리맵','메시 생성'].map((label, i) => {
       const cls = i<cur?'ok':i===cur?'now':'wait';
       const mark = i<cur?'✓':i===cur?'●':'○';
-      return `<div class="step"><span class="dot ${cls}">${mark}</span> ${label}</div>`;
-    }).join('') + `</div>`;
+      // 현재 단계에는 그 단계 경과 시간을 붙인다(라이브 갱신).
+      const timeSpan = i===cur ? ' <span class="step-time" data-since="'+esc(s.updatedAt||'')+'"></span>' : '';
+      return `<div class="step"><span class="dot ${cls}">${mark}</span> ${label}${timeSpan}</div>`;
+    }).join('') + `</div>` +
+    `<div class="sub total-time" data-since="${esc(s.createdAt||'')}" style="margin-top:14px"></div>`;
+
+  // 세그멘테이션은 수 분 걸리고 그 사이 상태 갱신이 없어 멈춘 듯 보인다 —
+  // createdAt/updatedAt 기준으로 매초 경과를 다시 계산해 살아 있음을 보인다.
+  const tick = () => {
+    const now = Date.now();
+    for (const node of el.querySelectorAll('[data-since]')) {
+      const since = Date.parse(node.dataset.since);
+      if (isNaN(since)) { node.textContent = ''; continue; }
+      const sec = (now - since) / 1000;
+      node.textContent = node.classList.contains('total-time')
+        ? `총 경과 ${fmtElapsed(sec)}`
+        : `· ${fmtElapsed(sec)}`;
+    }
+  };
+  tick();
+  progressTimer = setInterval(tick, 1000);
 }
 
 // ---------- 에러 ----------

@@ -77,8 +77,12 @@
   .dot { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
          display: grid; place-items: center; font-size: 10px; }
   .dot.ok  { background: #14361f; color: #4ade80; }
-  .dot.now { background: #3a2e0e; color: #fbbf24; }
+  .dot.now { background: #3a2e0e; color: #fbbf24; animation: dotpulse 1.2s ease-in-out infinite; }
   .dot.wait{ background: #222; color: #555; }
+  @keyframes dotpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.5); }
+                        50% { box-shadow: 0 0 0 6px rgba(251,191,36,0); } }
+  .step-time { font-family: monospace; font-size: 12px; color: #fbbf24; }
+  .total-time { font-family: monospace; color: #9aa; }
   .bigbar { height: 6px; background: #2a2a2a; border-radius: 3px; margin-top: 24px; overflow: hidden; }
   .bigbar > i { display: block; height: 100%; width: 0%; background: #fbbf24; }
 
