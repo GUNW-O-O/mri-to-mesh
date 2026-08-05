@@ -23,7 +23,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.14 /uv /usr/local/bin/uv
 
 # uv가 파이썬을 따로 내려받지 않고 apt의 3.11을 쓰게 한다.
 ENV UV_PYTHON_DOWNLOADS=never \
-    UV_PROJECT_ENVIRONMENT=/opt/venv
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_NO_CACHE=1
 
 WORKDIR /app
 
