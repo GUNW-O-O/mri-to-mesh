@@ -149,32 +149,23 @@ export class Viewer {
     return { variantId, root, meta, meshes, visible: true };
   }
 
-  // 메시별 재질. 프리셋이 켜져 있으면 프리셋 영역만 원색 불투명·나머지 투명;
-  // 없으면 반투명 셸 토글(this.transparent)을 전역 적용.
   _makeMaterial(mesh) {
     const c = mesh.userData.color;
-    let opaque;
-    if (this._presetSet) {
-      const name = mesh.userData.region ? mesh.userData.region.name : null;
-      opaque = !!(name && this._presetSet.has(name));
-    } else {
-      opaque = !this.transparent;
-    }
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
       side: THREE.DoubleSide,
-      transparent: !opaque,
-      opacity: opaque ? 1.0 : (this._presetSet ? 0.05 : 0.12),
-      depthWrite: opaque,
+      transparent: this.transparent,
+      opacity: this.transparent ? 0.12 : 1.0,
+      depthWrite: !this.transparent,
     });
   }
 
-  // 조건 프리셋 적용. set이 null이면 프리셋 해제(반투명 토글 상태로 복귀).
+  // 조건 프리셋 적용. 프리셋 영역만 보이고 나머지는 숨긴다(반투명 아님).
+  // set이 null이면 해제(group/side 토글 상태로 복귀). 가시성으로 처리해
+  // _updateVisibility가 group/side와 함께 계산한다.
   setPreset(regionNameSet) {
     this._presetSet = regionNameSet || null;
-    for (const s of this._allBrains()) {
-      for (const m of s.meshes) m.material = this._makeMaterial(m);
-    }
+    this._updateVisibility();
   }
 
   // 보이는 슬롯만 좌→우로 촘촘히 재배치(꺼진 건 자리 안 차지).
@@ -264,14 +255,17 @@ export class Viewer {
     }
   }
 
-  // group·side 토글을 전 슬롯의 모든 영역 메시에 동시 적용(최종 = group AND side).
+  // 최종 가시성 = group AND side AND 프리셋. 프리셋이 켜져 있으면 프리셋에 없는
+  // 영역(매칭 안 된 메시 포함)은 숨긴다.
   _updateVisibility() {
     for (const s of this._allBrains()) {
       for (const m of s.meshes) {
         const reg = m.userData.region;
-        m.visible = !reg
+        const groupSide = !reg
           || (this.groupChecked.get(reg.group) !== false
               && this.sideChecked.get(reg.side) !== false);
+        const presetOk = !this._presetSet || (reg && this._presetSet.has(reg.name));
+        m.visible = groupSide && presetOk;
       }
     }
   }
@@ -366,14 +360,9 @@ export class Viewer {
       p.brain.root.position.sub(c);
       radius = Math.max(radius, size.x, size.y, size.z);
     }
-    // 각 창을 자기 반쪽에 꽉 차게(거리 축소) + 안쪽(분할선 쪽)으로 살짝 붙인다.
-    // 카메라 정면(-Z)에서 화면상 +X가 왼쪽이므로, 왼창은 -X(=화면 오른쪽=중앙),
-    // 오른창은 +X(=화면 왼쪽=중앙)로 옮기면 둘이 가운데로 모인다.
-    const INNER = radius * 0.18;
-    for (const side of ['L', 'R']) {
-      const p = this.panes[side];
-      if (p.brain) p.brain.root.position.x += (side === 'L' ? -INNER : INNER);
-    }
+    // 각 창을 자기 반쪽에 꽉 차게(거리 축소). 브레인은 원점 중심 유지 — 안쪽으로
+    // 옮기면 OrbitControls pivot이 브레인 밖으로 벗어나 좌우 회전이 축을 틀며
+    // 돌아버린다(빙글빙글). 거리 축소만으로 두 창을 크게·가깝게 보인다.
     const dist = radius * 1.9, el = Math.PI / 9;
     for (const side of ['L', 'R']) {
       const cam = this.panes[side].camera;
