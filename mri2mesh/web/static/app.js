@@ -33,8 +33,11 @@ async function refreshJobs() {
     const div = document.createElement('div');
     div.className = 'job' + (r.jobId === selectedJob ? ' active' : '');
     div.onclick = () => selectJob(r.jobId);
+    // 폴더명은 jobId다(레이아웃). 이름을 따로 준 경우 jobId를 함께 보여줘야
+    // jobs/<jobId> 폴더를 찾을 수 있다 — 이름 == jobId면 중복이라 생략.
     div.innerHTML =
       `<div class="name">${esc(r.name)}</div>` +
+      (r.name !== r.jobId ? `<div class="jid" title="jobs/ 폴더명">${esc(r.jobId)}</div>` : '') +
       `<div class="row"><span class="chip ${chipClass(r)}">${chipText(r)}</span></div>`;
     const del = document.createElement('button');
     del.className = 'job-del'; del.textContent = '×'; del.title = '삭제';
