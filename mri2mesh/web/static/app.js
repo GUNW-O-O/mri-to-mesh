@@ -83,11 +83,15 @@ function scheduleList(){ clearTimeout(listTimer); listTimer = setTimeout(refresh
 async function selectJob(jobId) {
   selectedJob = jobId;
   clearTimeout(pollTimer);
-  // 옵션 큐·생성 상태는 잡별이다 — 다른 잡 고르면 비운다(전 잡 큐가 새 잡에
-  // 적용되는 혼선 방지).
+  // 옵션 큐·생성 상태·버튼은 잡별이다 — 다른 잡 고르면 비우고 되살린다(전 잡의
+  // 진행 중 생성이 새 잡의 버튼을 막거나 상태를 덮지 않게).
   variantQueue.length = 0; renderQueue();
   const genSt = document.getElementById('gen-status');
   if (genSt) genSt.textContent = '';
+  const genBtn = document.getElementById('gen-variant');
+  if (genBtn) genBtn.disabled = false;
+  const batchBtn = document.getElementById('gen-batch');
+  if (batchBtn) batchBtn.disabled = false;
   await refreshJobs();
   await renderStage();
 }
@@ -467,7 +471,9 @@ async function generateWithProgress(jobId, params, statusEl, prefix = '') {
     let p;
     try { p = await api.getGenProgress(jobId, token); }
     catch { continue; }   // 잠깐의 404 등은 재시도
-    if (statusEl) statusEl.textContent = p.total ? `${prefix}메쉬 생성 ${p.done}/${p.total}` : `${prefix}생성 중…`;
+    // 진행 표시는 그 잡을 보고 있을 때만 — 다른 잡으로 넘어가면 안 쓴다.
+    if (statusEl && selectedJob === jobId)
+      statusEl.textContent = p.total ? `${prefix}메쉬 생성 ${p.done}/${p.total}` : `${prefix}생성 중…`;
     if (p.finished) {
       if (p.error) throw new Error(p.error);
       return p.variantId;
@@ -484,12 +490,12 @@ document.getElementById('gen-variant').onclick = async () => {
   try {
     const variantId = await generateWithProgress(jobId, vpanelForm.collect(), st);
     await refreshJobs();
-    if (selectedJob === jobId) showViewer(await api.getStatus(jobId));
-    st.textContent = variantId;
+    // 그새 다른 잡으로 넘어갔으면 이 잡의 결과로 현재 화면·상태를 덮지 않는다.
+    if (selectedJob === jobId) { showViewer(await api.getStatus(jobId)); st.textContent = variantId; }
   } catch (err) {
-    st.textContent = err.message || '생성 실패';
+    if (selectedJob === jobId) st.textContent = err.message || '생성 실패';
   } finally {
-    btn.disabled = false;
+    if (selectedJob === jobId) btn.disabled = false;
   }
 };
 
@@ -533,9 +539,9 @@ document.getElementById('gen-batch').onclick = async () => {
   if (selectedJob === jobId) {
     await refreshJobs();
     showViewer(await api.getStatus(jobId));
+    st.textContent = `일괄 생성 완료 (${ok}/${total})`;
+    btn.disabled = false;
   }
-  st.textContent = `일괄 생성 완료 (${ok}/${total})`;
-  btn.disabled = false;
 };
 
 // ---------- 뷰어 표시 컨트롤 (반투명·빅뱅) ----------
