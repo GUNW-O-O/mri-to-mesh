@@ -154,6 +154,9 @@ def test_series_selection_custom_params_used(tmp_path):
     })
     assert cust["state"] == "done", cust.get("error")
     assert cust["variants"][0]["variantId"] != base["variants"][0]["variantId"]
+    # 고른 옵션이 변형에 기록돼 UI가 "무슨 옵션으로 뽑았나"를 표시할 수 있다
+    assert cust["variants"][0]["params"]["minVoxel"] == 250
+    assert base["variants"][0]["params"]["minVoxel"] == 100
 
 
 def test_series_selection_bad_params_returns_400(tmp_path):

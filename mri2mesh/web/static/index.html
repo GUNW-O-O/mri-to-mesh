@@ -94,6 +94,13 @@
   .opt-subtitle { font-size: 11px; color: #99a; margin: 10px 0 4px; font-weight: 600; }
   #groups label { display: block; margin: 3px 0; font-size: 12px; }
 
+  /* 변형 범례 (번호 → 옵션 요약) */
+  #variant-legend .leg-row { display: flex; gap: 8px; align-items: flex-start; margin: 5px 0; }
+  .leg-n { flex: 0 0 auto; min-width: 20px; height: 20px; border-radius: 6px;
+           background: #22314f; color: #cfe0ff; border: 1px solid #2d6cdf;
+           font-size: 12px; font-weight: 600; text-align: center; line-height: 20px; }
+  .leg-s { font-size: 11px; color: #9fb0c0; line-height: 1.4; }
+
   /* 하단 변형 토글 바 */
   #variant-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
                  display: none; gap: 6px; z-index: 5; pointer-events: auto;
@@ -175,7 +182,9 @@
   <div id="stage-error" class="panel" style="display:none"></div>
 
   <div id="vpanel" style="display:none">
-    <div class="opt-title">표시</div>
+    <div class="opt-title">변형 (옵션별 산출)</div>
+    <div id="variant-legend"></div>
+    <div class="opt-title" style="margin-top:12px">표시</div>
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
     <label class="slider-row">빅뱅 (explode)
       <input type="range" id="bigbang" min="0" max="1" step="0.02" value="0">

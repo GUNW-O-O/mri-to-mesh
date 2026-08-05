@@ -234,9 +234,16 @@ def run_segmentation_and_mesh(
         "variantId": variant.variant_id,
         "bytes": variant.metrics["glbBytes"],
         "createdAt": variant.params["createdAt"],
+        "params": _variant_params_view(variant.params),
     }]
     write_status(paths, status)
     return read_status(paths)
+
+
+def _variant_params_view(p: dict) -> dict:
+    """status.variants에 실을 표시용 파라미터부(사용자가 고른 축만). segSource·
+    labelTable·variantId·createdAt는 뺀다(PHI/중복 회피, 표시에 불필요)."""
+    return {k: p[k] for k in ("preprocess", "extractor", "smoothing", "decimation", "minVoxel") if k in p}
 
 
 def _image_version(image: str) -> str:
@@ -278,6 +285,7 @@ def add_variant(paths: JobPaths, params, *, table=None) -> dict:
         "variantId": variant.variant_id,
         "bytes": variant.metrics["glbBytes"],
         "createdAt": variant.params["createdAt"],
+        "params": _variant_params_view(variant.params),
     })
     write_status(paths, status)
     return {"variantId": variant.variant_id, "deduped": False}

@@ -204,20 +204,44 @@ function showViewer(s) {
   });
 }
 
-// 하단 변형 토글 바: 1 2 3 … 버튼으로 각 변형 on/off. 라벨은 순번, title은 variantId.
+// 변형 파라미터 한 줄 요약 — 어떤 옵션으로 뽑았는지 바로 보이게.
+function summaryOf(p) {
+  if (!p) return '';
+  const sm = p.smoothing || {};
+  const smTxt = sm.method === 'none' ? 'none'
+    : `${sm.method}${sm.iterations != null ? `×${sm.iterations}` : ''}`;
+  const dec = p.decimation || {};
+  const decTxt = dec.method === 'quadric' ? `quadric ${dec.targetRatio}` : 'none';
+  return `전처리 ${p.preprocess?.method ?? '?'} · 추출 ${p.extractor?.name ?? '?'}`
+       + ` · 스무딩 ${smTxt} · 감면 ${decTxt} · minVox ${p.minVoxel ?? '?'}`;
+}
+
+// 하단 변형 토글 바(1 2 3 … on/off) + vpanel 범례(번호 → 옵션 요약).
 function renderVariantBar(variants) {
   const bar = document.getElementById('variant-bar');
   bar.innerHTML = '';
   bar.style.display = variants.length ? 'flex' : 'none';
+  const legend = document.getElementById('variant-legend');
+  if (legend) legend.innerHTML = '';
   variants.forEach((v, i) => {
+    const summary = summaryOf(v.params);
     const b = document.createElement('button');
-    b.className = 'vbtn on'; b.textContent = String(i + 1); b.title = v.variantId;
+    b.className = 'vbtn on'; b.textContent = String(i + 1);
+    b.title = `${v.variantId}\n${summary}`;
     b.onclick = () => {
       const on = !b.classList.contains('on');
       b.classList.toggle('on', on);
       viewer.setVisible(v.variantId, on);
     };
     bar.append(b);
+
+    if (legend) {
+      const row = document.createElement('div');
+      row.className = 'leg-row';
+      row.innerHTML = `<span class="leg-n">${i + 1}</span>` +
+        `<span class="leg-s">${esc(summary || v.variantId)}</span>`;
+      legend.append(row);
+    }
   });
 }
 
