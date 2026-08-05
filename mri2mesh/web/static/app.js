@@ -341,6 +341,8 @@ function showDicomInfo(m) {
   }
   html += `<div class="sub" style="margin-top:10px">after (NIfTI 기하)</div>`;
   html += `<div class="kv">${esc(JSON.stringify(m.after && m.after.nifti, null, 1))}</div>`;
+  html += `<div class="sub" style="margin-top:10px">after (사이드카)</div>`;
+  html += `<div class="kv">${esc(JSON.stringify(m.after && m.after.sidecar, null, 1))}</div>`;
   box.innerHTML = html;
   dicomOverlay.classList.add('on');
 }

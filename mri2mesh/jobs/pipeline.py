@@ -23,7 +23,7 @@ from mri2mesh.io import (
     rank_series,
     run_dcm2niix,
 )
-from mri2mesh.io.dicom_meta import DicomMetaError, build_meta, write_meta
+from mri2mesh.io.dicom_meta import build_meta, write_meta
 from mri2mesh.jobs.layout import JobPaths, to_host_path
 from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
 from mri2mesh.jobs.status import (
@@ -121,7 +121,7 @@ def ingest_job(paths: JobPaths, src: Path, filename: str, *, dcm2niix_runner=Non
                 sidecar=_load_sidecar_dict(rep.sidecar_path),
             )
         write_meta(paths.dicom_meta_file, _meta)
-    except (DicomMetaError, OSError, IndexError):
+    except Exception:  # noqa: BLE001 — 감사 부가기능 실패가 파이프라인을 막으면 안 된다
         pass  # 감사 메타 없이 진행
 
     status = read_status(paths)
