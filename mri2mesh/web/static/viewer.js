@@ -363,7 +363,7 @@ export class Viewer {
     // 각 창을 자기 반쪽에 꽉 차게(거리 축소). 브레인은 원점 중심 유지 — 안쪽으로
     // 옮기면 OrbitControls pivot이 브레인 밖으로 벗어나 좌우 회전이 축을 틀며
     // 돌아버린다(빙글빙글). 거리 축소만으로 두 창을 크게·가깝게 보인다.
-    const dist = radius * 1.9, el = Math.PI / 9;
+    const dist = radius * 2.2, el = Math.PI / 9;
     for (const side of ['L', 'R']) {
       const cam = this.panes[side].camera;
       if (!cam) continue;
@@ -390,10 +390,16 @@ export class Viewer {
     const w = this.renderer.domElement.width / devicePixelRatio;
     const h = this.renderer.domElement.height / devicePixelRatio;
     const halfW = w / 2;
+    // 이미지를 안쪽(분할선 쪽)으로 민다 — 카메라 pose/pivot은 그대로라 회전은
+    // 브레인 중심 기준으로 깨끗이 돈다(빙글빙글 방지). offsetX>0은 화면 왼쪽으로
+    // 밀리므로, 왼창은 -(오른쪽=중앙), 오른창은 +(왼쪽=중앙)로.
+    const shift = halfW * 0.22;
     this.renderer.setScissorTest(true);
     const draw = (side, x) => {
       const p = this.panes[side];
-      p.camera.aspect = halfW / h; p.camera.updateProjectionMatrix();
+      p.camera.aspect = halfW / h;
+      p.camera.setViewOffset(halfW, h, side === 'L' ? -shift : shift, 0, halfW, h);
+      p.camera.updateProjectionMatrix();
       this.renderer.setViewport(x, 0, halfW, h);
       this.renderer.setScissor(x, 0, halfW, h);
       this.renderer.render(p.scene, p.camera);
