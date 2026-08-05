@@ -7,6 +7,12 @@ __pycache__/
 test-asset/
 work/
 out/
+# 잡 작업 폴더(원본·before 등 PHI). 이미지엔 COPY 안 되지만, 제외 안 하면 전체
+# build 컨텍스트로 docker 데몬에 전송돼 build 캐시에 남을 수 있다 — PHI를 데몬에
+# 안 보낸다. 런타임엔 compose가 호스트 OUTPUT_DIR을 /work/jobs에 바인드한다.
+jobs/
+# 로컬 시크릿·경로(OUTPUT_DIR 등)
+.env
 labels/FreeSurferColorLUT.txt
 # 루트에만 앵커(선행 슬래시) — mri2mesh/web/static/vendor(vendor한 three.js,
 # git 추적 대상)까지 지워지면 컨테이너 안 뷰어가 깨진다. 이건 미사용 원본

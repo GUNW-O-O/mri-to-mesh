@@ -115,6 +115,62 @@ def test_full_run_produces_four_files(tmp_path):
     assert (vdir / "params.json").is_file()
 
 
+def test_full_run_cleans_source_keeps_derived(tmp_path):
+    """세그 성공 후 원본·중간물(input·nifti·fs)은 삭제되고 익명 orig·seg만 남는다."""
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    src = _t1_upload(tmp_path)
+    ingest_job(p, src, "input.nii.gz")
+    selected = read_status(p).series[0]["niftiPath"]
+
+    status = run_segmentation_and_mesh(
+        p, Path(selected), image="fs:tag",
+        fastsurfer_runner=_fastsurfer_mock(p.fs_dir, "case"),
+    )
+    assert status.state == "done"
+    # 유지: 익명 반출 요소
+    assert (p.seg_dir / "orig.nii.gz").is_file()
+    assert (p.seg_dir / "seg.nii.gz").is_file()
+    assert p.mesh_dir.is_dir()
+    # 삭제: 원본·중간물
+    assert not p.input_dir.exists()
+    assert not p.nifti_dir.exists()
+    assert not p.fs_dir.exists()
+
+
+def test_deface_true_fails_until_implemented(tmp_path):
+    """deface=True는 아직 미구현이라 조용한 no-op가 아니라 명시 실패한다."""
+    import pytest
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    src = _t1_upload(tmp_path)
+    ingest_job(p, src, "input.nii.gz")
+    selected = read_status(p).series[0]["niftiPath"]
+    with pytest.raises(NotImplementedError):
+        run_segmentation_and_mesh(
+            p, Path(selected), image="fs:tag",
+            fastsurfer_runner=_fastsurfer_mock(p.fs_dir, "case"), deface=True,
+        )
+
+
+def test_strip_dicom_before_drops_phi_keeps_audit(tmp_path):
+    """_strip_dicom_before는 before·원본파일명(원본 PHI)만 지우고 after/removed는 남긴다."""
+    from mri2mesh.io.dicom_meta import read_meta, write_meta
+    from mri2mesh.jobs.pipeline import _strip_dicom_before
+    p = job_paths(tmp_path / "jobs", "job1").create()
+    write_meta(p.dicom_meta_file, {
+        "source": "dicom",
+        "originalFilenames": ["study/IM0001", "study/IM0002"],
+        "before": {"PatientName": "Hong^Gil^Dong", "PatientID": "12345"},
+        "after": {"nifti": {"dims": [1, 2, 3]}, "sidecar": {}},
+        "removed": ["PatientName", "PatientID"],
+    })
+    _strip_dicom_before(p)
+    meta = read_meta(p.dicom_meta_file)
+    assert meta["before"] is None
+    assert meta["originalFilenames"] == []
+    assert meta["after"]["nifti"]["dims"] == [1, 2, 3]   # after 유지
+    assert meta["removed"] == ["PatientName", "PatientID"]  # 감사 유지
+
+
 def test_run_segmentation_translates_mount_paths_for_sibling_container(tmp_path):
     """jobs_root/host_jobs_root가 있으면 -v 마운트만 호스트 경로로 바뀐다.
 

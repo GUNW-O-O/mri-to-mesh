@@ -23,7 +23,9 @@ from mri2mesh.io import (
     rank_series,
     run_dcm2niix,
 )
-from mri2mesh.io.dicom_meta import build_meta, write_meta
+from mri2mesh.io.deface import deface_nifti
+from mri2mesh.io.dicom_meta import build_meta, read_meta, write_meta
+from mri2mesh.io.nifti_anon import NiftiAnonError, anonymize_nifti
 from mri2mesh.jobs.layout import JobPaths, to_host_path
 from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
 from mri2mesh.jobs.status import (
@@ -140,6 +142,7 @@ def run_segmentation_and_mesh(
     fastsurfer_runner=None,
     table=None,
     params=None,
+    deface: bool = False,
     jobs_root: Path | None = None,
     host_jobs_root: Path | None = None,
 ) -> JobStatus:
@@ -147,6 +150,9 @@ def run_segmentation_and_mesh(
 
     params: 사용자가 시리즈 선택 화면에서 고른 메쉬 파라미터(MeshParams).
         None이면 baseline_params()(brainds 프로덕션 기준값)로 첫 변형을 만든다.
+    deface: True면 익명화한 orig.nii.gz에 얼굴 마스킹(defacing)을 적용한다.
+        현재 미구현(스텁) — True면 NotImplementedError로 명시 실패한다. UI 토글은
+        예정 상태다.
 
     jobs_root/host_jobs_root: api가 컨테이너 안에서 돌 때, 형제 FastSurfer
         컨테이너의 `-v` 인자를 호스트 경로로 바꾸기 위한 짝(Task 1
@@ -200,9 +206,25 @@ def run_segmentation_and_mesh(
         shutil.copy2(seg_result.orig_path, orig_dst)
 
         remap_segmentation(seg_result.seg_source_path, seg_canon, table)
-    except (OSError, RemapError) as exc:
+
+        # 반출 필수 요소(orig·seg)를 영상 구성요소만 남기고 익명화한다 — 헤더
+        # 잔여 메타·확장영역 제거. 실패는 remap 실패로 다뤄 진행을 막는다
+        # (익명화 안 된 NIfTI를 산출하면 안 된다).
+        anonymize_nifti(orig_dst)
+        anonymize_nifti(seg_canon)
+        # 얼굴 마스킹(옵션, 현재 스텁). deface=True면 미구현이라 명시 실패한다.
+        if deface:
+            deface_nifti(orig_dst)
+    except (OSError, RemapError, NiftiAnonError) as exc:
         record_error(paths, "remap", None, str(exc))
         return read_status(paths)
+
+    # 세그·익명화 성공 — 원본·중간물을 정리한다. 익명 orig.nii.gz·seg.nii.gz만
+    # 남기고, raw 업로드(input)·dcm2niix 중간물과 비선택 시리즈(nifti)·FastSurfer
+    # 작업폴더(fs, 익명화 안 된 orig.mgz 포함)를 지운다. 재작업은 원본 재수입
+    # 플로우로 한다. 정리 실패는 파이프라인을 막지 않는다(부가 작업).
+    _cleanup_source(paths)
+    _strip_dicom_before(paths)
 
     # --- mesh (기본 변형 하나) ---
     status = read_status(paths)
@@ -238,6 +260,29 @@ def run_segmentation_and_mesh(
     }]
     write_status(paths, status)
     return read_status(paths)
+
+
+def _cleanup_source(paths: JobPaths) -> None:
+    """세그 성공 후 원본·중간물 삭제. 익명 orig.nii.gz·seg.nii.gz(seg/)와 mesh/만
+    남긴다. 실패해도 파이프라인을 막지 않는다(ignore_errors)."""
+    for d in (paths.input_dir, paths.nifti_dir, paths.fs_dir):
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def _strip_dicom_before(paths: JobPaths) -> None:
+    """dicom-meta.json에서 before(원본 DICOM 헤더값)·원본 파일명을 제거한다 —
+    원본 PHI 그 자체이므로 원본을 지우면 이것도 지운다. 익명화 감사(after/removed)는
+    남긴다. 파일이 없거나 실패해도 조용히 넘어간다(부가 작업)."""
+    p = paths.dicom_meta_file
+    if not p.is_file():
+        return
+    try:
+        meta = read_meta(p)
+        meta["before"] = None
+        meta["originalFilenames"] = []
+        write_meta(p, meta)
+    except (OSError, ValueError):
+        pass
 
 
 def _variant_params_view(p: dict) -> dict:

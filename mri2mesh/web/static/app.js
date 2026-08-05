@@ -144,6 +144,14 @@ function renderSelect(s) {
   optWrap.append(form.root);
   el.append(optWrap);
 
+  // orig defacing 토글 — 코드/UI 틀만. 구현 전까지 비활성(체크 불가). 활성화 시
+  // deface=true로 전달되지만 파이프라인이 아직 미구현이라 명시 실패한다.
+  const defWrap = document.createElement('label');
+  defWrap.className = 'sub';
+  defWrap.style.cssText = 'display:block;margin-top:12px';
+  defWrap.innerHTML = '<input type="checkbox" id="opt-deface" disabled> orig 얼굴 마스킹(defacing) <span style="color:#666">— 구현 예정</span>';
+  el.append(defWrap);
+
   const go = document.createElement('button');
   go.className = 'primary'; go.textContent = '세그 시작 →';
   go.style.marginTop = '16px';
@@ -151,7 +159,8 @@ function renderSelect(s) {
     if (go.disabled) return;
     go.disabled = true; go.textContent = '시작 중…';
     try {
-      await api.selectSeries(selectedJob, Number(el.dataset.pick), form.collect());
+      const deface = document.getElementById('opt-deface')?.checked ?? false;
+      await api.selectSeries(selectedJob, Number(el.dataset.pick), form.collect(), deface);
       await refreshJobs(); renderStage();
     } catch (err) {
       console.error('[selectSeries]', err);

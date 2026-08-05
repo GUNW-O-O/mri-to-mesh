@@ -123,6 +123,9 @@ class SeriesSelection(BaseModel):
     # 시리즈와 함께 고른 메쉬 파라미터. None이면 baseline(프로덕션 기준값)으로
     # 첫 변형을 만든다. 세그멘테이션은 이 값과 무관하게 항상 동일하게 돈다.
     params: dict | None = None
+    # orig.nii.gz 얼굴 마스킹(defacing). 현재 미구현 — UI 토글 예정. True면
+    # 파이프라인이 명시 실패한다.
+    deface: bool = False
 
 
 def _checked_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
@@ -274,7 +277,7 @@ def create_app(config: AppConfig) -> FastAPI:
                 run_segmentation_and_mesh(
                     paths, Path(selected_nifti), config.fastsurfer_image,
                     threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
-                    params=mesh_params,
+                    params=mesh_params, deface=sel.deface,
                     jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
                 )
             except Exception as exc:  # noqa: BLE001 — 잡을 running에 남기지 않는다
