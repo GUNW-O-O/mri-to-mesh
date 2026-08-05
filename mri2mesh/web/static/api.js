@@ -48,3 +48,8 @@ export function glbUrl(jobId, variantId) {
 export function metaUrl(jobId, variantId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}/regions-meta.json`;
 }
+
+export async function getDicomMeta(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/dicom-meta`);
+  return j(res);
+}

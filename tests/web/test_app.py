@@ -190,6 +190,13 @@ def test_index_html_has_option_form_anchors(tmp_path):
     assert 'id="gen-variant"' in html
 
 
+def test_index_html_has_dicom_info_anchors(tmp_path):
+    client, _ = _client(tmp_path)
+    html = client.get("/").text
+    assert 'id="dicom-info"' in html
+    assert 'class="job-info"' in html or 'job-info' in html
+
+
 def test_static_mount_blocks_traversal(tmp_path):
     """StaticFiles가 static/ 밖으로 나가지 못해야 한다(임의 파일 읽기 방지)."""
     client, _ = _client(tmp_path)
@@ -522,3 +529,19 @@ def test_delete_job_removes_it(tmp_path):
 def test_delete_missing_job_404(tmp_path):
     client, _ = _client(tmp_path)
     assert client.delete("/api/jobs/nope-1234").status_code == 404
+
+
+def test_dicom_meta_served_for_nifti_upload(tmp_path):
+    client, _ = _client(tmp_path)
+    jid = client.post("/api/jobs",
+                      files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
+    r = client.get(f"/api/jobs/{jid}/dicom-meta")
+    assert r.status_code == 200
+    m = r.json()
+    assert m["source"] == "nifti"
+    assert m["originalFilenames"] == ["scan.nii.gz"]
+
+
+def test_dicom_meta_404_when_absent(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.get("/api/jobs/nope-1234/dicom-meta").status_code == 404
