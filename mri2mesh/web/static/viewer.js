@@ -43,6 +43,15 @@ export class Viewer {
     this.groupChecked = new Map();
     this.sideChecked = new Map();
 
+    // ---- compare(scissor) 모드 ----
+    this.mode = 'single';                 // 'single' | 'compare'
+    this.normalize = false;
+    this._groupsRendered = false;         // 영역 토글 UI 1회 생성 여부
+    this.panes = {
+      L: { scene: null, camera: null, brain: null, box: null },
+      R: { scene: null, camera: null, brain: null, box: null },
+    };
+
     this._resize = () => this._onResize();
     addEventListener('resize', this._resize);
     this._onResize();
@@ -190,18 +199,22 @@ export class Viewer {
     this._renderMetrics();
   }
 
+  // 현재 모드의 brain 슬롯들 — 표기 컨트롤(반투명·빅뱅·영역)이 공통으로 순회한다.
+  _allBrains() {
+    if (this.mode === 'compare') return ['L', 'R'].map(s => this.panes[s].brain).filter(Boolean);
+    return this.slots;
+  }
+
   setBigbang(t) {
     this.bigbang = t;
-    for (const s of this.slots) {
-      for (const m of s.meshes) {
-        m.position.copy(m.userData.rel).multiplyScalar(t * EXPLODE_K);
-      }
+    for (const s of this._allBrains()) {
+      for (const m of s.meshes) m.position.copy(m.userData.rel).multiplyScalar(t * EXPLODE_K);
     }
   }
 
   setTransparent(on) {
     this.transparent = on;
-    for (const s of this.slots) {
+    for (const s of this._allBrains()) {
       for (const m of s.meshes) m.material = this._makeMaterial(m.userData.color);
     }
   }
@@ -212,8 +225,9 @@ export class Viewer {
     const el = document.getElementById('groups');
     if (!el) return;
     el.innerHTML = '';
-    if (!this.slots.length) return;
-    const regions = this.slots[0].meta.regions;
+    const brains = this._allBrains();
+    if (!brains.length) return;
+    const regions = brains[0].meta.regions;
     this._renderToggleList(el, regions, 'group', this.groupChecked);
     this._renderToggleList(el, regions, 'side', this.sideChecked);
   }
@@ -233,7 +247,7 @@ export class Viewer {
 
   // group·side 토글을 전 슬롯의 모든 영역 메시에 동시 적용(최종 = group AND side).
   _updateVisibility() {
-    for (const s of this.slots) {
+    for (const s of this._allBrains()) {
       for (const m of s.meshes) {
         const reg = m.userData.region;
         m.visible = !reg
@@ -250,9 +264,123 @@ export class Viewer {
     el.textContent = `변형 ${vis.length}/${this.slots.length} 표시`;
   }
 
+  enterCompareMode() {
+    this.clear();                         // single 슬롯·영역 토글 정리
+    this._groupsRendered = false;
+    this.mode = 'compare';
+    for (const side of ['L', 'R']) {
+      const p = this.panes[side];
+      if (!p.scene) {
+        p.scene = new THREE.Scene();
+        p.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const d1 = new THREE.DirectionalLight(0xffffff, 1.2); d1.position.set(2, 3, 4); p.scene.add(d1);
+        const d2 = new THREE.DirectionalLight(0x7799cc, 0.5); d2.position.set(-3, -1, -2); p.scene.add(d2);
+        p.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 5000);
+        p.camera.up.set(0, 1, 0);
+      }
+    }
+    this.controls.object = this.panes.L.camera;   // 동기 회전 기준 = 좌 카메라
+    this.controls.update();
+  }
+
+  enterSingleMode() {
+    for (const side of ['L', 'R']) {
+      const p = this.panes[side];
+      if (p.brain) { p.scene.remove(p.brain.root); this._disposeSlot(p.brain); p.brain = null; p.box = null; }
+    }
+    this.controls.object = this.camera;
+    this.mode = 'single';
+    const w = this.renderer.domElement.width / devicePixelRatio;
+    const h = this.renderer.domElement.height / devicePixelRatio;
+    this.renderer.setViewport(0, 0, w, h);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
+  async setPane(side, jobId, variantId) {
+    const p = this.panes[side];
+    if (p.brain) { p.scene.remove(p.brain.root); this._disposeSlot(p.brain); p.brain = null; p.box = null; }
+    if (jobId && variantId) {
+      const slot = await this._buildSlot(jobId, variantId);   // 기존 로더 재사용
+      if (this.mode !== 'compare') { this._disposeSlot(slot); return; }  // 그새 모드 바뀜
+      p.brain = slot;
+      p.box = new THREE.Box3().setFromObject(slot.root);       // 원본 크기(정규화 기준)
+      p.scene.add(slot.root);
+      // 새 창에도 현재 표기 상태 반영
+      for (const m of slot.meshes) m.material = this._makeMaterial(m.userData.color);
+      this.setBigbang(this.bigbang);
+      if (!this._groupsRendered) { this._renderGroups(); this._groupsRendered = true; }
+      this._updateVisibility();
+    }
+    this._applyNormalize();
+    this._frameCompare();
+  }
+
+  setNormalize(on) { this.normalize = on; this._applyNormalize(); this._frameCompare(); }
+
+  // 정규화 ON: 각 창 brain을 공통 크기로(bbox 최대변 → TARGET). OFF: 원본(scale 1).
+  _applyNormalize() {
+    const TARGET = 100;
+    for (const side of ['L', 'R']) {
+      const p = this.panes[side];
+      if (!p.brain || !p.box) continue;
+      const size = p.box.getSize(new THREE.Vector3());
+      const maxdim = Math.max(size.x, size.y, size.z) || 1;
+      p.brain.root.scale.setScalar(this.normalize ? TARGET / maxdim : 1);
+    }
+  }
+
+  // 두 창을 각자 원점 중심 정렬하고 같은 카메라 거리로 프레임(둘 다 화면에 꽉 차게).
+  _frameCompare() {
+    let radius = 1;
+    for (const side of ['L', 'R']) {
+      const p = this.panes[side];
+      if (!p.brain) continue;
+      p.brain.root.position.set(0, 0, 0);
+      p.brain.root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(p.brain.root);
+      const size = box.getSize(new THREE.Vector3());
+      const c = box.getCenter(new THREE.Vector3());
+      p.brain.root.position.sub(c);
+      radius = Math.max(radius, size.x, size.y, size.z);
+    }
+    const dist = radius * 2.5, el = Math.PI / 9;
+    for (const side of ['L', 'R']) {
+      const cam = this.panes[side].camera;
+      if (!cam) continue;
+      cam.position.set(0, dist * Math.sin(el), -dist * Math.cos(el));
+      cam.near = radius / 100; cam.far = radius * 20;
+      cam.updateProjectionMatrix();
+      cam.lookAt(0, 0, 0);
+    }
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+  }
+
   _animate() {
     requestAnimationFrame(this._animate);
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    if (this.mode === 'compare') this._renderCompare();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
+  _renderCompare() {
+    const L = this.panes.L.camera, R = this.panes.R.camera;
+    R.position.copy(L.position); R.quaternion.copy(L.quaternion);
+    R.updateProjectionMatrix();
+    const w = this.renderer.domElement.width / devicePixelRatio;
+    const h = this.renderer.domElement.height / devicePixelRatio;
+    const halfW = w / 2;
+    this.renderer.setScissorTest(true);
+    const draw = (side, x) => {
+      const p = this.panes[side];
+      p.camera.aspect = halfW / h; p.camera.updateProjectionMatrix();
+      this.renderer.setViewport(x, 0, halfW, h);
+      this.renderer.setScissor(x, 0, halfW, h);
+      this.renderer.render(p.scene, p.camera);
+    };
+    draw('L', 0); draw('R', halfW);
+    this.renderer.setScissorTest(false);
   }
 }

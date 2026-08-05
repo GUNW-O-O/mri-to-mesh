@@ -493,5 +493,55 @@ function showDicomInfo(m) {
   dicomOverlay.classList.add('on');
 }
 
+// ---------- 에셋 비교 모드 ----------
+let compareMode = false;
+document.getElementById('mode-compare').onclick = async () => {
+  compareMode = !compareMode;
+  document.getElementById('mode-compare').classList.toggle('active-mode', compareMode);
+  document.getElementById('compare-bar').style.display = compareMode ? 'flex' : 'none';
+  document.getElementById('variant-bar').style.display = 'none';
+  // compare: 생성 UI·범례 숨기고 표기 컨트롤만. vpanel은 열어 둔다.
+  const genUi = document.getElementById('mesh-options');
+  if (genUi) genUi.style.display = compareMode ? 'none' : '';
+  const legend = document.getElementById('variant-legend');
+  if (legend) legend.style.display = compareMode ? 'none' : '';
+  if (compareMode) {
+    document.getElementById('vpanel').style.display = 'block';
+    viewer.enterCompareMode();
+    await fillCompareJobs();
+  } else {
+    viewer.enterSingleMode();
+    if (selectedJob) renderStage(); else showStage('empty');
+  }
+};
+
+async function fillCompareJobs() {
+  let rows = [];
+  try { rows = await api.listJobs(); } catch (err) { console.error('[compareJobs]', err); }
+  const done = rows.filter(r => r.state === 'done');
+  for (const pane of document.querySelectorAll('.cmp-pane')) {
+    const jobSel = pane.querySelector('.cmp-job');
+    const varSel = pane.querySelector('.cmp-variant');
+    const side = pane.dataset.side;
+    jobSel.innerHTML = '<option value="">잡 선택</option>' +
+      done.map(r => `<option value="${esc(r.jobId)}">${esc(r.name)}</option>`).join('');
+    varSel.innerHTML = '';
+    jobSel.onchange = async () => {
+      varSel.innerHTML = '';
+      if (!jobSel.value) { viewer.setPane(side, null, null); return; }
+      let s; try { s = await api.getStatus(jobSel.value); } catch { viewer.setPane(side, null, null); return; }
+      varSel.innerHTML = (s.variants || []).map((v, i) =>
+        `<option value="${esc(v.variantId)}">${i + 1}. ${esc(v.variantId)}</option>`).join('');
+      if (varSel.value) viewer.setPane(side, jobSel.value, varSel.value);
+      else viewer.setPane(side, null, null);
+    };
+    varSel.onchange = () => {
+      if (jobSel.value && varSel.value) viewer.setPane(side, jobSel.value, varSel.value);
+    };
+  }
+}
+
+document.getElementById('normalize').onchange = (e) => viewer.setNormalize(e.target.checked);
+
 // ---------- 부트 ----------
 refreshJobs();
