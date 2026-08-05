@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import { Viewer } from './viewer.js';
 import { createVariant, deleteJob, getDicomMeta } from './api.js';
-import { collectParams } from './options.js';
+import { buildOptionsForm } from './options.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
@@ -128,13 +128,24 @@ function renderSelect(s) {
     el.append(d);
   });
   el.dataset.pick = 0;
+
+  // 메쉬 옵션도 여기서 함께 고른다 — 세그멘테이션은 옵션과 무관하게 항상 동일하게
+  // 돌고, 옵션은 세그 결과에 의존하지 않는다. 안 건드리면 baseline(프로덕션 기준값).
+  const optWrap = document.createElement('div');
+  optWrap.style.cssText = 'margin-top:18px;border-top:1px solid #2a2a2a;padding-top:14px';
+  optWrap.innerHTML = '<div class="opt-title">메쉬 생성 옵션 (기본값 = 프로덕션 기준)</div>';
+  const form = buildOptionsForm();
+  optWrap.append(form.root);
+  el.append(optWrap);
+
   const go = document.createElement('button');
   go.className = 'primary'; go.textContent = '세그 시작 →';
+  go.style.marginTop = '16px';
   go.onclick = async () => {
     if (go.disabled) return;
     go.disabled = true; go.textContent = '시작 중…';
     try {
-      await api.selectSeries(selectedJob, Number(el.dataset.pick));
+      await api.selectSeries(selectedJob, Number(el.dataset.pick), form.collect());
       await refreshJobs(); renderStage();
     } catch (err) {
       console.error('[selectSeries]', err);
@@ -308,14 +319,16 @@ function walkEntry(entry, out) {
   });
 }
 
-// ---------- 옵션 폼 → 변형 생성 ----------
+// ---------- 옵션 폼 → 변형 생성 (뷰어패널, done 이후 비교용) ----------
+const vpanelForm = buildOptionsForm();
+document.getElementById('vpanel-opts').append(vpanelForm.root);
 document.getElementById('gen-variant').onclick = async () => {
   const btn = document.getElementById('gen-variant');
   const st = document.getElementById('gen-status');
   if (btn.disabled || !selectedJob) return;
   btn.disabled = true; st.textContent = '생성 중…';
   try {
-    const { variantId } = await createVariant(selectedJob, collectParams());
+    const { variantId } = await createVariant(selectedJob, vpanelForm.collect());
     await refreshJobs();
     await viewer.showVariant(selectedJob, variantId);   // 새 변형으로 갱신
     st.textContent = variantId;

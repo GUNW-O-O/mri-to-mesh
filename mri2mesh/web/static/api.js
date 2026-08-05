@@ -24,11 +24,11 @@ export async function deleteJob(jobId) {
   return j(res);
 }
 
-export async function selectSeries(jobId, index) {
+export async function selectSeries(jobId, index, params = null) {
   return j(await fetch(`/api/jobs/${encodeURIComponent(jobId)}/series`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ seriesIndex: index }),
+    body: JSON.stringify({ seriesIndex: index, params }),
   }));
 }
 

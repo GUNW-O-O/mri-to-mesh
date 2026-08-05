@@ -18,4 +18,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # 잡 작업 폴더 — 호스트 OUTPUT_DIR에 바인드
       - ${OUTPUT_DIR}:/work/jobs
+      # dev 편의: 정적 프론트(html/js/css)를 호스트에서 바인드해 UI 수정이
+      # --build 없이 브라우저 새로고침만으로 반영되게 한다. static은 실행 로직이
+      # 아니라 서빙 파일이라 안전하다. 원치 않으면 이 줄만 지우면 이미지에
+      # 구워진 사본(api.Dockerfile COPY)이 그대로 쓰인다.
+      - ./mri2mesh/web/static:/app/mri2mesh/web/static:ro
     # GPU는 api가 아니라 형제 FastSurfer 컨테이너가 docker run --gpus로 잡는다
