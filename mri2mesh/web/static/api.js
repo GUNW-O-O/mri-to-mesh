@@ -49,6 +49,13 @@ export function metaUrl(jobId, variantId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}/regions-meta.json`;
 }
 
+export async function getVariantParams(jobId, variantId) {
+  const res = await fetch(
+    `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}/params.json`);
+  if (!res.ok) return null;   // 없으면 요약 생략(범례가 variantId로 폴백)
+  return res.json();
+}
+
 export async function getDicomMeta(jobId) {
   const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/dicom-meta`);
   return j(res);

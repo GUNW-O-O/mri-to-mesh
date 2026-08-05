@@ -322,6 +322,17 @@ def create_app(config: AppConfig) -> FastAPI:
             raise HTTPException(404, "meta 없음")
         return FileResponse(p, media_type="application/json")
 
+    @app.get("/api/jobs/{job_id}/variants/{variant_id}/params.json")
+    def variant_params(job_id: str, variant_id: str) -> FileResponse:
+        # 변형이 무슨 옵션으로 산출됐는지(사람이 읽을 요약의 원천). 메쉬 파라미터
+        # 뿐이라 PHI 아님. 옛 잡은 status.variants에 params가 없어도 이 파일은 있다.
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        vdir = _confined_child(paths.mesh_dir, variant_id, "variant_id")
+        p = vdir / "params.json"
+        if not p.is_file():
+            raise HTTPException(404, "params 없음")
+        return FileResponse(p, media_type="application/json")
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return (_STATIC / "index.html").read_text(encoding="utf-8")

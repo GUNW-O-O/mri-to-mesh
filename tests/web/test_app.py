@@ -159,6 +159,24 @@ def test_series_selection_custom_params_used(tmp_path):
     assert base["variants"][0]["params"]["minVoxel"] == 100
 
 
+def test_variant_params_json_served(tmp_path):
+    """변형이 무슨 옵션으로 산출됐는지 params.json으로 확인 가능 — UI 범례의 원천.
+    옛 잡(status에 params 없음)도 이 파일로 요약을 복구한다."""
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("a.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = _run_to_done(client, tmp_path, jid, holder)
+    assert s["state"] == "done", s.get("error")
+    vid = s["variants"][0]["variantId"]
+
+    r = client.get(f"/api/jobs/{jid}/variants/{vid}/params.json")
+    assert r.status_code == 200
+    p = r.json()
+    assert p["minVoxel"] == 100
+    assert p["extractor"]["name"]  # 옵션이 사람이 읽을 형태로 존재
+    # 없는 변형은 404
+    assert client.get(f"/api/jobs/{jid}/variants/v99-zzzz/params.json").status_code == 404
+
+
 def test_series_selection_bad_params_returns_400(tmp_path):
     """잘못된 메쉬 파라미터는 백그라운드로 넘어가기 전에 400."""
     client, holder = _client(tmp_path)

@@ -189,10 +189,16 @@ function renderError(s) {
 }
 
 // ---------- 뷰어 (다중 변형 일렬 배치) ----------
-function showViewer(s) {
+async function showViewer(s) {
   const variants = s.variants || [];
   if (!variants.length) return;
   const jobId = selectedJob;
+  // status.variants에 params가 없는 잡(서버 변경 전 생성)은 디스크의 params.json에서
+  // 채운다 — 범례가 해시(variantId) 대신 옵션 요약을 보이게.
+  await Promise.all(variants.map(async (v) => {
+    if (!v.params) v.params = await api.getVariantParams(jobId, v.variantId).catch(() => null);
+  }));
+  if (selectedJob !== jobId) return;    // 그새 다른 잡으로 넘어갔으면 버림
   const bb = document.getElementById('bigbang');
   if (bb) bb.value = 0;                 // 새 로드는 빅뱅 0에서 시작
   renderVariantBar(variants);
