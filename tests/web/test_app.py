@@ -260,6 +260,14 @@ def test_unexpected_pipeline_error_does_not_strand_job(tmp_path):
     assert "Jane_Q_Placeholder" not in json.dumps(s["error"])
 
 
+def test_seg_concurrency_limit_defaults_to_two(tmp_path):
+    """동시 세그 상한 기본값 2 — GPU 경합 방지(전역 세마포어)."""
+    cfg = AppConfig(jobs_root=tmp_path / "jobs", fastsurfer_image="fs:tag")
+    assert cfg.max_concurrent_seg == 2
+    # create_app이 상한으로 세마포어를 만들며 정상 기동한다
+    assert create_app(cfg) is not None
+
+
 def test_index_serves_viewer(tmp_path):
     client, _ = _client(tmp_path)
     r = client.get("/")
