@@ -16,7 +16,17 @@ from mri2mesh.mesh import (
     Smoothing,
     default_params,
 )
-from mri2mesh.mesh.generate import GenerateError, generate_variant
+from mri2mesh.mesh.generate import GenerateError, _ras_to_gltf_yup, generate_variant
+
+
+def test_ras_to_gltf_yup_maps_superior_to_up():
+    """RAS(x=right, y=anterior, z=superior) → glTF Y-up(x, z, -y).
+    superior(+Z)가 위(+Y)로, anterior(+Y)가 -Z로 간다."""
+    v = np.array([[1.0, 2.0, 3.0], [0.0, 0.0, 5.0]])
+    out = _ras_to_gltf_yup(v)
+    assert out.tolist() == [[1.0, 3.0, -2.0], [0.0, 5.0, -0.0]]
+    # 위(superior)는 결과의 +Y로 온다
+    assert out[1].tolist() == [0.0, 5.0, -0.0]
 
 
 def test_generate_writes_all_variant_files(tmp_path, synthetic_seg):
