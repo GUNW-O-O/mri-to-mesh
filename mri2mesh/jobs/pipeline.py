@@ -24,6 +24,7 @@ from mri2mesh.io import (
     run_dcm2niix,
 )
 from mri2mesh.io.dicom_meta import build_meta, write_meta
+from mri2mesh.io.nifti_anon import NiftiAnonError, anonymize_nifti
 from mri2mesh.jobs.layout import JobPaths, to_host_path
 from mri2mesh.jobs.meta import build_regions_meta, write_regions_meta
 from mri2mesh.jobs.status import (
@@ -200,7 +201,13 @@ def run_segmentation_and_mesh(
         shutil.copy2(seg_result.orig_path, orig_dst)
 
         remap_segmentation(seg_result.seg_source_path, seg_canon, table)
-    except (OSError, RemapError) as exc:
+
+        # 반출 필수 요소(orig·seg)를 영상 구성요소만 남기고 익명화한다 — 헤더
+        # 잔여 메타·확장영역 제거. 실패는 remap 실패로 다뤄 진행을 막는다
+        # (익명화 안 된 NIfTI를 산출하면 안 된다).
+        anonymize_nifti(orig_dst)
+        anonymize_nifti(seg_canon)
+    except (OSError, RemapError, NiftiAnonError) as exc:
         record_error(paths, "remap", None, str(exc))
         return read_status(paths)
 
