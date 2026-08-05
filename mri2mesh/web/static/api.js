@@ -32,13 +32,20 @@ export async function selectSeries(jobId, index, params = null, deface = false) 
   }));
 }
 
+// 변형 생성을 시작하고 진행 폴링용 토큰을 받는다({token}). 실제 생성은 백그라운드.
 export async function createVariant(jobId, params) {
   const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/variants`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
-  return j(res);   // 기존 j(): 비정상 응답이면 throw
+  return j(res);   // {token}. 비정상 응답이면 throw
+}
+
+export async function getGenProgress(jobId, token) {
+  const res = await fetch(
+    `/api/jobs/${encodeURIComponent(jobId)}/variants-progress/${encodeURIComponent(token)}`);
+  return j(res);   // {done,total,variantId,deduped,finished,error}
 }
 
 export async function deleteVariant(jobId, variantId) {

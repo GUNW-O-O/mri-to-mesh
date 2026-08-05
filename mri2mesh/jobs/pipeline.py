@@ -296,10 +296,11 @@ def _image_version(image: str) -> str:
     return image.rsplit(":", 1)[-1] if ":" in image else image
 
 
-def add_variant(paths: JobPaths, params, *, table=None) -> dict:
+def add_variant(paths: JobPaths, params, *, table=None, progress_cb=None) -> dict:
     """done 잡의 seg 캐시에서 메쉬만 다시 만들어 변형을 추가한다.
 
     같은 파라미터(해시 일치)면 생성하지 않고 기존 variantId를 돌려준다.
+    progress_cb(done, total): 라벨 단위 진행 콜백(UI 진행바용).
     Raises:
         ValueError: 잡이 done이 아니거나 seg.nii.gz가 없을 때.
     """
@@ -317,7 +318,8 @@ def add_variant(paths: JobPaths, params, *, table=None) -> dict:
     index = len(status.variants) + 1
     variant_id = params.variant_id(index)
     vdir = paths.variant_dir(variant_id)
-    variant = generate_variant(seg_canon, vdir, params, index=index, table=table)
+    variant = generate_variant(seg_canon, vdir, params, index=index, table=table,
+                               progress_cb=progress_cb)
 
     meta = build_regions_meta(
         seg_canon, variant.regions, variant.variant_id,

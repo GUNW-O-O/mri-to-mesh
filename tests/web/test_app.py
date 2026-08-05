@@ -135,6 +135,19 @@ def _run_to_done(client, tmp_path, jid, holder, params=None):
     return s
 
 
+def _gen_variant(client, jid, params):
+    """POST /variants(비동기 토큰) 후 진행을 폴링해 완료 상태를 돌려준다."""
+    r = client.post(f"/api/jobs/{jid}/variants", json=params)
+    assert r.status_code == 200, r.text
+    token = r.json()["token"]
+    for _ in range(200):
+        prog = client.get(f"/api/jobs/{jid}/variants-progress/{token}").json()
+        if prog["finished"]:
+            return prog
+        time.sleep(0.05)
+    raise AssertionError("변형 생성이 끝나지 않음")
+
+
 def test_series_selection_custom_params_used(tmp_path):
     """시리즈와 함께 보낸 메쉬 파라미터가 첫 변형에 반영된다 — baseline과 다른
     옵션은 파라미터 해시가 달라 variantId가 달라진다."""
@@ -185,9 +198,9 @@ def test_delete_variant_removes_it(tmp_path):
     s = _run_to_done(client, tmp_path, jid, holder)
     assert s["state"] == "done", s.get("error")
     # 두 번째 변형 추가
-    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 300})
-    assert r.status_code == 200, r.text
-    vid2 = r.json()["variantId"]
+    prog = _gen_variant(client, jid, {"minVoxel": 300})
+    assert not prog["error"], prog
+    vid2 = prog["variantId"]
     vdir2 = tmp_path / "jobs" / jid / "mesh" / vid2
     assert vdir2.is_dir()
 
@@ -556,20 +569,19 @@ def _job_to_done(client, holder, tmp_path):
 def test_post_variant_creates_new(tmp_path):
     client, holder = _client(tmp_path)
     jid = _job_to_done(client, holder, tmp_path)
-    r = client.post(f"/api/jobs/{jid}/variants",
-                    json={"smoothing": {"method": "none"}})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["deduped"] is False
+    prog = _gen_variant(client, jid, {"smoothing": {"method": "none"}})
+    assert prog["deduped"] is False and not prog["error"]
+    # 라벨 단위 진행이 보고됐다(진행바 원천)
+    assert prog["total"] > 0 and prog["done"] == prog["total"]
     s = client.get(f"/api/jobs/{jid}").json()
-    assert body["variantId"] in [v["variantId"] for v in s["variants"]]
+    assert prog["variantId"] in [v["variantId"] for v in s["variants"]]
 
 
 def test_post_variant_dedupes_baseline(tmp_path):
     client, holder = _client(tmp_path)
     jid = _job_to_done(client, holder, tmp_path)
-    r = client.post(f"/api/jobs/{jid}/variants", json={})  # 빈 = baseline
-    assert r.json()["deduped"] is True
+    prog = _gen_variant(client, jid, {})  # 빈 = baseline(첫 변형과 동일 → dedup)
+    assert prog["deduped"] is True
 
 
 def test_post_variant_rejects_bad_params(tmp_path):
@@ -589,27 +601,25 @@ def test_post_variant_rejects_non_dict_axis(tmp_path):
     assert r.status_code == 400
 
 
-def test_post_variant_generate_error_maps_to_422(tmp_path):
-    """리뷰 발견 #2: 파라미터가 유효해도 minVoxel이 모든 라벨을 걸러내
-    만들 메시가 없으면(GenerateError) 500이 아니라 422여야 한다.
+def test_post_variant_generate_error_reports_via_progress(tmp_path):
+    """파라미터가 유효해도 minVoxel이 모든 라벨을 걸러내 만들 메시가 없으면
+    (GenerateError) 비동기 진행의 error로 보고된다(HTTP는 토큰 200).
 
-    목 세그의 라벨 17은 복셀 1000개(10*10*10)뿐이라 minVoxel을 그보다
-    크게 주면 유일한 라벨이 걸러져 GenerateError("만들 메시가 없다")가 난다.
+    목 세그의 라벨 17은 복셀 1000개(10*10*10)뿐이라 minVoxel을 그보다 크게
+    주면 유일한 라벨이 걸러져 GenerateError("만들 메시가 없다")가 난다.
     """
     client, holder = _client(tmp_path)
     jid = _job_to_done(client, holder, tmp_path)
-    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 1001})
-    assert r.status_code == 422
-    # PHI: seg 경로 등 예외 원문이 본문에 안 새어 나가야 한다
-    assert "seg" not in r.text.lower()
-    assert ".nii" not in r.text
+    prog = _gen_variant(client, jid, {"minVoxel": 1001})
+    assert prog["error"] == "메쉬를 생성하지 못했습니다"   # 원문(seg 경로 등) 미노출
+    assert prog["variantId"] is None
 
 
-def test_post_variant_rejects_non_done(tmp_path):
+def test_post_variant_rejects_non_done_via_progress(tmp_path):
     client, _ = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("input.nii.gz", _nifti_bytes())}).json()["jobId"]
-    r = client.post(f"/api/jobs/{jid}/variants", json={})
-    assert r.status_code == 409
+    prog = _gen_variant(client, jid, {})
+    assert prog["error"] == "done 잡에서만 변형을 생성할 수 있다"
 
 
 def test_delete_job_removes_it(tmp_path):
