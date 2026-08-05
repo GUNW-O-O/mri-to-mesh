@@ -2,7 +2,6 @@
   "노화": [
     "Left-Hippocampus", "Right-Hippocampus",
     "Left-Lateral-Ventricle", "Right-Lateral-Ventricle", "3rd-Ventricle", "4th-Ventricle",
-    "Left-Cerebral-White-Matter", "Right-Cerebral-White-Matter", "WM-hypointensities",
     "ctx-lh-superiorfrontal", "ctx-rh-superiorfrontal",
     "ctx-lh-rostralmiddlefrontal", "ctx-rh-rostralmiddlefrontal",
     "ctx-lh-caudalmiddlefrontal", "ctx-rh-caudalmiddlefrontal",
