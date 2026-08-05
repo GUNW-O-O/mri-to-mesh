@@ -16,6 +16,10 @@ def _config() -> AppConfig:
         jobs_root=Path(os.environ.get("MRI2MESH_JOBS_ROOT", "/work/jobs")),
         fastsurfer_image=image,
         threads=int(os.environ.get("FASTSURFER_THREADS", "8")),
+        # 동시 세그멘테이션 상한 — FastSurfer는 --gpus all로 GPU를 물어 여러 잡을
+        # 동시에 돌리면 한 GPU에서 메모리 경합·OOM이 난다. 잡별 lock은 같은 잡만
+        # 막으므로 별도 전역 세마포어가 필요하다.
+        max_concurrent_seg=int(os.environ.get("MRI2MESH_MAX_CONCURRENT_SEG", "2")),
         # 형제 FastSurfer 컨테이너의 -v 인자를 호스트 경로로 바꾸는 데 쓴다
         # (Task 1 to_host_path). 없으면(호스트에서 uvicorn 직접 실행) None —
         # jobs_root 자체가 이미 호스트 경로이므로 변환하지 않는다.

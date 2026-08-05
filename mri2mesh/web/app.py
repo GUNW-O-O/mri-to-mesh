@@ -9,7 +9,7 @@ import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
@@ -116,6 +116,9 @@ class AppConfig:
     #: 컨테이너 안에서 돌 때, jobs_root가 호스트에서 어디에 있는지.
     #: 형제 FastSurfer 컨테이너의 -v 인자에 쓴다. 호스트 직접 실행이면 None.
     host_jobs_root: Path | None = None
+    #: 동시 세그멘테이션 상한. FastSurfer가 GPU를 물어 여러 잡을 동시에 돌리면
+    #: 경합·OOM이 나므로 전역 세마포어로 제한한다(잡별 lock으론 부족).
+    max_concurrent_seg: int = 2
 
 
 class SeriesSelection(BaseModel):
@@ -138,6 +141,9 @@ def create_app(config: AppConfig) -> FastAPI:
     app = FastAPI(title="mri2mesh")
     config.jobs_root.mkdir(parents=True, exist_ok=True)
     series_locks: dict[str, Lock] = {}
+    # 동시 세그멘테이션 상한(GPU 경합 방지). 백그라운드 태스크는 스레드풀에서
+    # 돌므로 threading 세마포어로 게이트한다. 초과 잡은 여기서 대기한다.
+    seg_semaphore = BoundedSemaphore(max(1, config.max_concurrent_seg))
 
     def _clean_name(name: str | None, fallback: str) -> str:
         if not name:
@@ -274,12 +280,15 @@ def create_app(config: AppConfig) -> FastAPI:
             # status="running"에 영원히 박힌다 — 업로드 경로처럼 catch-all로
             # 막는다. record_error가 sanitize_stderr로 PHI를 지운다.
             try:
-                run_segmentation_and_mesh(
-                    paths, Path(selected_nifti), config.fastsurfer_image,
-                    threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
-                    params=mesh_params, deface=sel.deface,
-                    jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
-                )
+                # 전역 세마포어로 동시 세그를 상한까지만 — 초과분은 여기서 대기.
+                # GPU를 무는 FastSurfer가 여러 개 겹쳐 OOM 나는 걸 막는다.
+                with seg_semaphore:
+                    run_segmentation_and_mesh(
+                        paths, Path(selected_nifti), config.fastsurfer_image,
+                        threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
+                        params=mesh_params, deface=sel.deface,
+                        jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
+                    )
             except Exception as exc:  # noqa: BLE001 — 잡을 running에 남기지 않는다
                 record_error(paths, read_status(paths).step or "pipeline", None, str(exc))
 

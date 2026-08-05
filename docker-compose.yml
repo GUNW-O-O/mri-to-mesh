@@ -9,6 +9,8 @@ services:
     environment:
       FASTSURFER_IMAGE: ${FASTSURFER_IMAGE}
       FASTSURFER_THREADS: ${FASTSURFER_THREADS:-8}
+      # 동시 세그멘테이션 상한(GPU 경합 방지). 기본 2.
+      MRI2MESH_MAX_CONCURRENT_SEG: ${MAX_CONCURRENT_SEG:-2}
       MRI2MESH_JOBS_ROOT: /work/jobs
       # 형제 FastSurfer 컨테이너의 -v 인자에 쓸 호스트 경로 (Task 1 to_host_path).
       # 도커 데몬은 호스트에 있어 api 내부의 /work/jobs를 모른다.
