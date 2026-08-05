@@ -67,8 +67,14 @@ async function refreshJobs() {
   // 진행 중인 잡이 있으면 목록도 계속 갱신
   if (rows.some(r => r.state === 'running')) scheduleList();
 }
-function chipClass(r){ return r.state==='done'?'done':r.state==='error'?'err':r.state==='awaiting_series'?'await':'run'; }
-function chipText(r){ return r.state==='done'?'완료':r.state==='error'?'실패':r.state==='awaiting_series'?'시리즈 선택':`${r.step} 중`; }
+function chipClass(r){ return r.state==='done'?'done':r.state==='error'?'err':(r.state==='awaiting_series'||r.step==='queued')?'await':'run'; }
+function chipText(r){
+  if (r.state==='done') return '완료';
+  if (r.state==='error') return '실패';
+  if (r.state==='awaiting_series') return '시리즈 선택';
+  if (r.step==='queued') return '대기 중';
+  return `${r.step} 중`;
+}
 
 let listTimer = null;
 function scheduleList(){ clearTimeout(listTimer); listTimer = setTimeout(refreshJobs, 2000); }
@@ -194,15 +200,23 @@ let progressTimer = null;   // 경과 시간 라이브 틱(폴링과 별개로 �
 function renderProgress(s) {
   clearInterval(progressTimer);
   const order = ['io','segment','remap','mesh'];
-  const cur = order.indexOf(s.step);
+  // "queued"는 세그 슬롯(세마포어) 대기 — 아직 세그 시작 전이다. 세그 단계를
+  // 현재로 잡되, 실행(now)과 구분되는 대기(queued) 표시를 준다.
+  const queued = s.step === 'queued';
+  const cur = queued ? order.indexOf('segment') : order.indexOf(s.step);
   const el = document.getElementById('stage-progress');
   el.innerHTML = `<h2>처리 중</h2><div class="steps">` +
     ['업로드·dcm2niix','세그멘테이션','라벨 리맵','메시 생성'].map((label, i) => {
-      const cls = i<cur?'ok':i===cur?'now':'wait';
-      const mark = i<cur?'✓':i===cur?'●':'○';
-      // 현재 단계에는 그 단계 경과 시간을 붙인다(라이브 갱신).
+      let cls, mark, suffix = '';
+      if (i < cur) { cls = 'ok'; mark = '✓'; }
+      else if (i === cur && queued) {
+        cls = 'queued'; mark = '⏳';
+        suffix = ' <span style="color:#38bdf8">(세그 슬롯 대기 중)</span>';
+      } else if (i === cur) { cls = 'now'; mark = '●'; }
+      else { cls = 'wait'; mark = '○'; }
+      // 현재 단계에는 그 단계 경과 시간을 붙인다(대기면 대기 시간, 라이브 갱신).
       const timeSpan = i===cur ? ' <span class="step-time" data-since="'+esc(s.updatedAt||'')+'"></span>' : '';
-      return `<div class="step"><span class="dot ${cls}">${mark}</span> ${label}${timeSpan}</div>`;
+      return `<div class="step"><span class="dot ${cls}">${mark}</span> ${label}${timeSpan}${suffix}</div>`;
     }).join('') + `</div>` +
     `<div class="sub total-time" data-since="${esc(s.createdAt||'')}" style="margin-top:14px"></div>`;
 

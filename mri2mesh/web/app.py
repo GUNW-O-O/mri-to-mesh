@@ -270,7 +270,10 @@ def create_app(config: AppConfig) -> FastAPI:
                 raise HTTPException(400, "잘못된 시리즈 index")
             selected_nifti = series[sel.seriesIndex]["niftiPath"]
             job_status.state = "running"
-            job_status.step = "segment"
+            # "queued" = 세그 슬롯(세마포어) 대기 중. run_segmentation_and_mesh가
+            # 세마포어를 잡고 실제 시작하면 step을 "segment"로 바꾼다 — 그 전까지
+            # 대기 상태를 UI가 실행 중과 구분해 보여준다.
+            job_status.step = "queued"
             write_status(paths, job_status)
 
         def work():
