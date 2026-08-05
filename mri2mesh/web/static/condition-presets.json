@@ -1,0 +1,32 @@
+{
+  "노화": [
+    "Left-Hippocampus", "Right-Hippocampus",
+    "Left-Lateral-Ventricle", "Right-Lateral-Ventricle", "3rd-Ventricle", "4th-Ventricle",
+    "Left-Cerebral-White-Matter", "Right-Cerebral-White-Matter", "WM-hypointensities",
+    "ctx-lh-superiorfrontal", "ctx-rh-superiorfrontal",
+    "ctx-lh-rostralmiddlefrontal", "ctx-rh-rostralmiddlefrontal",
+    "ctx-lh-caudalmiddlefrontal", "ctx-rh-caudalmiddlefrontal",
+    "ctx-lh-lateralorbitofrontal", "ctx-rh-lateralorbitofrontal",
+    "ctx-lh-medialorbitofrontal", "ctx-rh-medialorbitofrontal",
+    "Left-Cerebellum-Cortex", "Right-Cerebellum-Cortex"
+  ],
+  "치매": [
+    "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala", "Right-Amygdala",
+    "Left-Inf-Lat-Vent", "Right-Inf-Lat-Vent",
+    "ctx-lh-entorhinal", "ctx-rh-entorhinal", "ctx-lh-parahippocampal", "ctx-rh-parahippocampal",
+    "ctx-lh-middletemporal", "ctx-rh-middletemporal", "ctx-lh-inferiortemporal", "ctx-rh-inferiortemporal",
+    "ctx-lh-fusiform", "ctx-rh-fusiform"
+  ],
+  "알콜": [
+    "Left-Hippocampus", "Right-Hippocampus",
+    "Left-Cerebellum-Cortex", "Right-Cerebellum-Cortex",
+    "Left-Cerebellum-White-Matter", "Right-Cerebellum-White-Matter",
+    "Left-Lateral-Ventricle", "Right-Lateral-Ventricle", "3rd-Ventricle",
+    "Left-Thalamus", "Right-Thalamus",
+    "Left-VentralDC", "Right-VentralDC",
+    "ctx-lh-superiorfrontal", "ctx-rh-superiorfrontal",
+    "ctx-lh-rostralmiddlefrontal", "ctx-rh-rostralmiddlefrontal",
+    "ctx-lh-lateralorbitofrontal", "ctx-rh-lateralorbitofrontal",
+    "ctx-lh-medialorbitofrontal", "ctx-rh-medialorbitofrontal"
+  ]
+}

@@ -2,6 +2,7 @@ import * as api from './api.js';
 import { Viewer } from './viewer.js';
 import { createVariant, deleteJob, getDicomMeta } from './api.js';
 import { buildOptionsForm } from './options.js';
+import { loadPresets, presetNames } from './presets.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
@@ -499,6 +500,7 @@ document.getElementById('mode-compare').onclick = async () => {
   compareMode = !compareMode;
   document.getElementById('mode-compare').classList.toggle('active-mode', compareMode);
   document.getElementById('compare-bar').style.display = compareMode ? 'flex' : 'none';
+  document.getElementById('scissor-divider').style.display = compareMode ? 'block' : 'none';
   document.getElementById('variant-bar').style.display = 'none';
   // compare: 생성 UI·범례 숨기고 표기 컨트롤만. vpanel은 열어 둔다.
   const genUi = document.getElementById('mesh-options');
@@ -542,6 +544,20 @@ async function fillCompareJobs() {
 }
 
 document.getElementById('normalize').onchange = (e) => viewer.setNormalize(e.target.checked);
+
+// ---------- 조건 프리셋 (노화/치매/알콜) ----------
+// 정적 JSON에서 영역 세트를 읽어 셀렉트를 채우고, 선택 시 뷰어에 적용(두 모드 공통).
+let presetMap = new Map();
+loadPresets().then(m => {
+  presetMap = m;
+  const sel = document.getElementById('preset');
+  for (const name of presetNames(m)) {
+    const o = document.createElement('option'); o.value = name; o.textContent = name; sel.append(o);
+  }
+});
+document.getElementById('preset').onchange = (e) => {
+  viewer.setPreset(e.target.value ? presetMap.get(e.target.value) : null);
+};
 
 // ---------- 부트 ----------
 refreshJobs();

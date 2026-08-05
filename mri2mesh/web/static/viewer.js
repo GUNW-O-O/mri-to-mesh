@@ -37,6 +37,7 @@ export class Viewer {
     this.slots = [];          // {variantId, root, meta, meshes[], visible}
     this.transparent = false;
     this.bigbang = 0;
+    this._presetSet = null;   // 조건 프리셋 영역 집합(null=해제)
     this.loadGeneration = 0;
     // 영역 group/side 토글 — 전 슬롯에 동시 적용(변형들은 같은 라벨표라 영역 집합
     // 이 동일하다). 최종 mesh.visible = group AND side.
@@ -133,7 +134,7 @@ export class Viewer {
       const region = byNode.get(o.name);
       o.userData.region = region || null;          // group/side 토글용
       o.userData.color = region ? region.color : [200, 200, 200];
-      o.material = this._makeMaterial(o.userData.color);
+      o.material = this._makeMaterial(o);
       meshes.push(o);
     });
 
@@ -148,14 +149,32 @@ export class Viewer {
     return { variantId, root, meta, meshes, visible: true };
   }
 
-  _makeMaterial(c) {
+  // 메시별 재질. 프리셋이 켜져 있으면 프리셋 영역만 원색 불투명·나머지 투명;
+  // 없으면 반투명 셸 토글(this.transparent)을 전역 적용.
+  _makeMaterial(mesh) {
+    const c = mesh.userData.color;
+    let opaque;
+    if (this._presetSet) {
+      const name = mesh.userData.region ? mesh.userData.region.name : null;
+      opaque = !!(name && this._presetSet.has(name));
+    } else {
+      opaque = !this.transparent;
+    }
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
       side: THREE.DoubleSide,
-      transparent: this.transparent,
-      opacity: this.transparent ? 0.12 : 1.0,
-      depthWrite: !this.transparent,
+      transparent: !opaque,
+      opacity: opaque ? 1.0 : (this._presetSet ? 0.05 : 0.12),
+      depthWrite: opaque,
     });
+  }
+
+  // 조건 프리셋 적용. set이 null이면 프리셋 해제(반투명 토글 상태로 복귀).
+  setPreset(regionNameSet) {
+    this._presetSet = regionNameSet || null;
+    for (const s of this._allBrains()) {
+      for (const m of s.meshes) m.material = this._makeMaterial(m);
+    }
   }
 
   // 보이는 슬롯만 좌→우로 촘촘히 재배치(꺼진 건 자리 안 차지).
@@ -215,7 +234,7 @@ export class Viewer {
   setTransparent(on) {
     this.transparent = on;
     for (const s of this._allBrains()) {
-      for (const m of s.meshes) m.material = this._makeMaterial(m.userData.color);
+      for (const m of s.meshes) m.material = this._makeMaterial(m);
     }
   }
 
@@ -308,7 +327,7 @@ export class Viewer {
       p.box = new THREE.Box3().setFromObject(slot.root);       // 원본 크기(정규화 기준)
       p.scene.add(slot.root);
       // 새 창에도 현재 표기 상태 반영
-      for (const m of slot.meshes) m.material = this._makeMaterial(m.userData.color);
+      for (const m of slot.meshes) m.material = this._makeMaterial(m);
       this.setBigbang(this.bigbang);
       if (!this._groupsRendered) { this._renderGroups(); this._groupsRendered = true; }
       this._updateVisibility();
