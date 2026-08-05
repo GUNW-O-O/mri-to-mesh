@@ -408,6 +408,52 @@ document.getElementById('gen-variant').onclick = async () => {
   }
 };
 
+// ---------- 옵션 큐 → 일괄 생성 ----------
+// 여러 옵션 세트를 큐에 쌓아 한 번에 변형 생성(서버 POST /variants 순차 호출, dedup됨).
+const variantQueue = [];
+function renderQueue() {
+  const el = document.getElementById('queue-list');
+  el.innerHTML = '';
+  const batchBtn = document.getElementById('gen-batch');
+  batchBtn.style.display = variantQueue.length ? 'block' : 'none';
+  batchBtn.textContent = `큐 일괄 생성 (${variantQueue.length})`;
+  variantQueue.forEach((p, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'queue-chip';
+    chip.innerHTML = `<span>${esc(summaryOf(p))}</span>`;
+    const x = document.createElement('button');
+    x.textContent = '×'; x.title = '큐에서 제거';
+    x.onclick = () => { variantQueue.splice(i, 1); renderQueue(); };
+    chip.append(x);
+    el.append(chip);
+  });
+}
+document.getElementById('queue-add').onclick = () => {
+  variantQueue.push(vpanelForm.collect());
+  renderQueue();
+};
+document.getElementById('gen-batch').onclick = async () => {
+  const btn = document.getElementById('gen-batch');
+  const st = document.getElementById('gen-status');
+  if (btn.disabled || !selectedJob || !variantQueue.length) return;
+  const jobId = selectedJob;
+  btn.disabled = true;
+  const total = variantQueue.length;
+  let ok = 0;
+  for (const p of variantQueue) {
+    st.textContent = `일괄 생성 중… ${ok + 1}/${total}`;
+    try { await createVariant(jobId, p); ok++; }
+    catch (err) { console.error('[batch]', err); }
+  }
+  variantQueue.length = 0; renderQueue();
+  if (selectedJob === jobId) {
+    await refreshJobs();
+    showViewer(await api.getStatus(jobId));
+  }
+  st.textContent = `일괄 생성 완료 (${ok}/${total})`;
+  btn.disabled = false;
+};
+
 // ---------- 뷰어 표시 컨트롤 (반투명·빅뱅) ----------
 const transparentEl = document.getElementById('transparent');
 if (transparentEl) transparentEl.onchange = (e) => viewer.setTransparent(e.target.checked);

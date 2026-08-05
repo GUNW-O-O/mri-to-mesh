@@ -114,6 +114,15 @@
   .vbtn.on { background: #22314f; border-color: #2d6cdf; color: #cfe0ff; }
   #mesh-options { margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
   .opt-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #cdd; }
+  .gen-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .gen-actions .primary, .gen-actions .ghost { margin-top: 0; padding: 8px 10px; font-size: 12px; }
+  #queue-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .queue-chip { display: flex; gap: 6px; align-items: flex-start; font-size: 11px;
+                color: #9fb0c0; background: #16233c; border: 1px solid #24406a;
+                border-radius: 6px; padding: 4px 6px; }
+  .queue-chip button { margin-left: auto; background: transparent; border: 0; color: #97a;
+                       cursor: pointer; font-size: 13px; line-height: 1; }
+  .queue-chip button:hover { color: #f87171; }
 
   /* 옵션 폼 (options.js buildOptionsForm) — 시리즈 화면·뷰어패널 공용 */
   .mesh-opts { display: flex; flex-direction: column; gap: 12px; }
@@ -198,7 +207,12 @@
     <div id="mesh-options">
       <div class="opt-title">비교 변형 생성</div>
       <div id="vpanel-opts"></div>
-      <button id="gen-variant" class="primary" style="margin-top:8px">변형 생성</button>
+      <div class="gen-actions">
+        <button id="gen-variant" class="primary">변형 생성</button>
+        <button id="queue-add" class="ghost">＋ 큐에 추가</button>
+      </div>
+      <div id="queue-list"></div>
+      <button id="gen-batch" class="primary" style="display:none;margin-top:6px">큐 일괄 생성</button>
       <div id="gen-status" class="sub"></div>
     </div>
   </div>
