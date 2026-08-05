@@ -529,10 +529,11 @@ async function fillCompareJobs() {
     jobSel.onchange = async () => {
       varSel.innerHTML = '';
       if (!jobSel.value) { viewer.setPane(side, null, null); return; }
-      let s; try { s = await api.getStatus(jobSel.value); } catch { return; }
+      let s; try { s = await api.getStatus(jobSel.value); } catch { viewer.setPane(side, null, null); return; }
       varSel.innerHTML = (s.variants || []).map((v, i) =>
         `<option value="${esc(v.variantId)}">${i + 1}. ${esc(v.variantId)}</option>`).join('');
       if (varSel.value) viewer.setPane(side, jobSel.value, varSel.value);
+      else viewer.setPane(side, null, null);
     };
     varSel.onchange = () => {
       if (jobSel.value && varSel.value) viewer.setPane(side, jobSel.value, varSel.value);

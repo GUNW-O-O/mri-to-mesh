@@ -367,7 +367,7 @@ export class Viewer {
 
   _renderCompare() {
     const L = this.panes.L.camera, R = this.panes.R.camera;
-    R.position.copy(L.position); R.quaternion.copy(L.quaternion); R.zoom = L.zoom;
+    R.position.copy(L.position); R.quaternion.copy(L.quaternion);
     R.updateProjectionMatrix();
     const w = this.renderer.domElement.width / devicePixelRatio;
     const h = this.renderer.domElement.height / devicePixelRatio;
