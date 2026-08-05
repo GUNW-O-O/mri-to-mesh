@@ -304,6 +304,26 @@ def create_app(config: AppConfig) -> FastAPI:
                 # 예외 메시지에는 seg 경로가 섞일 수 있어(PHI) HTTP 본문엔 안 담는다
                 raise HTTPException(422, "메쉬를 생성하지 못했습니다")
 
+    @app.delete("/api/jobs/{job_id}/variants/{variant_id}")
+    def delete_variant(job_id: str, variant_id: str) -> dict:
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        if not paths.status_file.is_file():
+            raise HTTPException(404, "job 없음")
+        vdir = _confined_child(paths.mesh_dir, variant_id, "variant_id")
+        # status 갱신과 폴더 삭제를 잡별 lock 안에서 — 동시 변형 생성/삭제가
+        # variants 목록을 깨뜨리지 않게.
+        lock = series_locks.setdefault(job_id, Lock())
+        with lock:
+            status = read_status(paths)
+            kept = [v for v in status.variants if v["variantId"] != variant_id]
+            if len(kept) == len(status.variants):
+                raise HTTPException(404, "변형 없음")
+            status.variants = kept
+            write_status(paths, status)
+            if vdir.is_dir():
+                shutil.rmtree(vdir)
+        return {"deleted": variant_id}
+
     @app.get("/api/jobs/{job_id}/variants/{variant_id}/regions.glb")
     def glb(job_id: str, variant_id: str) -> FileResponse:
         paths = _checked_job_paths(config.jobs_root, job_id)

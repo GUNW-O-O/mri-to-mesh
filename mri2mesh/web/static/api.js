@@ -41,6 +41,13 @@ export async function createVariant(jobId, params) {
   return j(res);   // 기존 j(): 비정상 응답이면 throw
 }
 
+export async function deleteVariant(jobId, variantId) {
+  const res = await fetch(
+    `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}`,
+    { method: 'DELETE' });
+  return j(res);
+}
+
 export function glbUrl(jobId, variantId) {
   return `/api/jobs/${encodeURIComponent(jobId)}/variants/${encodeURIComponent(variantId)}/regions.glb`;
 }

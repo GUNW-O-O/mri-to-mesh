@@ -246,6 +246,18 @@ function renderVariantBar(variants) {
       row.className = 'leg-row';
       row.innerHTML = `<span class="leg-n">${i + 1}</span>` +
         `<span class="leg-s">${esc(summary || v.variantId)}</span>`;
+      const del = document.createElement('button');
+      del.className = 'leg-del'; del.textContent = '×'; del.title = '이 변형(메쉬) 삭제';
+      del.onclick = async () => {
+        if (!confirm(`변형 ${i + 1}을(를) 삭제할까요?`)) return;
+        const jobId = selectedJob;
+        try {
+          await api.deleteVariant(jobId, v.variantId);
+          if (selectedJob !== jobId) return;
+          showViewer(await api.getStatus(jobId));   // 남은 변형으로 다시 그림
+        } catch (err) { console.error('[deleteVariant]', err); }
+      };
+      row.append(del);
       legend.append(row);
     }
   });

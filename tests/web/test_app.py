@@ -177,6 +177,29 @@ def test_variant_params_json_served(tmp_path):
     assert client.get(f"/api/jobs/{jid}/variants/v99-zzzz/params.json").status_code == 404
 
 
+def test_delete_variant_removes_it(tmp_path):
+    """변형(메쉬 산출) 하나만 삭제 — status에서 빠지고 폴더도 지워진다.
+    없는 변형은 404."""
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("a.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = _run_to_done(client, tmp_path, jid, holder)
+    assert s["state"] == "done", s.get("error")
+    # 두 번째 변형 추가
+    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 300})
+    assert r.status_code == 200, r.text
+    vid2 = r.json()["variantId"]
+    vdir2 = tmp_path / "jobs" / jid / "mesh" / vid2
+    assert vdir2.is_dir()
+
+    d = client.delete(f"/api/jobs/{jid}/variants/{vid2}")
+    assert d.status_code == 200
+    left = [v["variantId"] for v in client.get(f"/api/jobs/{jid}").json()["variants"]]
+    assert vid2 not in left and len(left) == 1
+    assert not vdir2.exists()
+    # 이미 지운 것 재삭제 → 404
+    assert client.delete(f"/api/jobs/{jid}/variants/{vid2}").status_code == 404
+
+
 def test_series_selection_bad_params_returns_400(tmp_path):
     """잘못된 메쉬 파라미터는 백그라운드로 넘어가기 전에 400."""
     client, holder = _client(tmp_path)
