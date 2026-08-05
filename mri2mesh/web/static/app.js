@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import { Viewer } from './viewer.js';
 import { createVariant, deleteJob, getDicomMeta } from './api.js';
-import { collectParams } from './options.js';
+import { buildOptionsForm } from './options.js';
 
 const viewer = new Viewer(document.getElementById('canvas'));
 let selectedJob = null;
@@ -33,8 +33,11 @@ async function refreshJobs() {
     const div = document.createElement('div');
     div.className = 'job' + (r.jobId === selectedJob ? ' active' : '');
     div.onclick = () => selectJob(r.jobId);
+    // 폴더명은 jobId다(레이아웃). 이름을 따로 준 경우 jobId를 함께 보여줘야
+    // jobs/<jobId> 폴더를 찾을 수 있다 — 이름 == jobId면 중복이라 생략.
     div.innerHTML =
       `<div class="name">${esc(r.name)}</div>` +
+      (r.name !== r.jobId ? `<div class="jid" title="jobs/ 폴더명">${esc(r.jobId)}</div>` : '') +
       `<div class="row"><span class="chip ${chipClass(r)}">${chipText(r)}</span></div>`;
     const del = document.createElement('button');
     del.className = 'job-del'; del.textContent = '×'; del.title = '삭제';
@@ -54,7 +57,10 @@ async function refreshJobs() {
       try { showDicomInfo(await getDicomMeta(r.jobId)); }
       catch (err) { console.error('[dicomMeta]', err); }
     };
-    div.append(del, info);
+    const actions = document.createElement('div');
+    actions.className = 'job-actions';
+    actions.append(info, del);
+    div.append(actions);
     el.append(div);
   }
   // 진행 중인 잡이 있으면 목록도 계속 갱신
@@ -101,7 +107,10 @@ function showStage(state) {
   for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
     document.getElementById(id).style.display = 'none';
   document.getElementById('vpanel').style.display = state==='done' ? 'block' : 'none';
-  if (state !== 'done') viewer.clear();
+  if (state !== 'done') {
+    viewer.clear();
+    document.getElementById('variant-bar').style.display = 'none';
+  }
   const show = map[state];
   if (show) document.getElementById(show).style.display = 'block';
 }
@@ -125,13 +134,24 @@ function renderSelect(s) {
     el.append(d);
   });
   el.dataset.pick = 0;
+
+  // 메쉬 옵션도 여기서 함께 고른다 — 세그멘테이션은 옵션과 무관하게 항상 동일하게
+  // 돌고, 옵션은 세그 결과에 의존하지 않는다. 안 건드리면 baseline(프로덕션 기준값).
+  const optWrap = document.createElement('div');
+  optWrap.style.cssText = 'margin-top:18px;border-top:1px solid #2a2a2a;padding-top:14px';
+  optWrap.innerHTML = '<div class="opt-title">메쉬 생성 옵션 (기본값 = 프로덕션 기준)</div>';
+  const form = buildOptionsForm();
+  optWrap.append(form.root);
+  el.append(optWrap);
+
   const go = document.createElement('button');
   go.className = 'primary'; go.textContent = '세그 시작 →';
+  go.style.marginTop = '16px';
   go.onclick = async () => {
     if (go.disabled) return;
     go.disabled = true; go.textContent = '시작 중…';
     try {
-      await api.selectSeries(selectedJob, Number(el.dataset.pick));
+      await api.selectSeries(selectedJob, Number(el.dataset.pick), form.collect());
       await refreshJobs(); renderStage();
     } catch (err) {
       console.error('[selectSeries]', err);
@@ -168,16 +188,78 @@ function renderError(s) {
   el.innerHTML = `<h2>실패 · ${esc(s.step)}</h2><div class="sub">${esc((s.error&&s.error.message)||'')}</div>`;
 }
 
-// ---------- 뷰어 ----------
-function showViewer(s) {
-  const v = s.variants && s.variants[0];
-  if (!v) return;
+// ---------- 뷰어 (다중 변형 일렬 배치) ----------
+async function showViewer(s) {
+  const variants = s.variants || [];
+  if (!variants.length) return;
   const jobId = selectedJob;
-  viewer.showVariant(jobId, v.variantId).catch(err => {
-    console.error('[showVariant]', err);
+  // status.variants에 params가 없는 잡(서버 변경 전 생성)은 디스크의 params.json에서
+  // 채운다 — 범례가 해시(variantId) 대신 옵션 요약을 보이게.
+  await Promise.all(variants.map(async (v) => {
+    if (!v.params) v.params = await api.getVariantParams(jobId, v.variantId).catch(() => null);
+  }));
+  if (selectedJob !== jobId) return;    // 그새 다른 잡으로 넘어갔으면 버림
+  const bb = document.getElementById('bigbang');
+  if (bb) bb.value = 0;                 // 새 로드는 빅뱅 0에서 시작
+  renderVariantBar(variants);
+  viewer.loadVariants(jobId, variants.map(v => v.variantId)).catch(err => {
+    console.error('[loadVariants]', err);
     if (selectedJob !== jobId) return;
     const metrics = document.getElementById('metrics');
     if (metrics) metrics.textContent = '메시 로드 실패';
+  });
+}
+
+// 변형 파라미터 한 줄 요약 — 어떤 옵션으로 뽑았는지 바로 보이게.
+function summaryOf(p) {
+  if (!p) return '';
+  const sm = p.smoothing || {};
+  const smTxt = sm.method === 'none' ? 'none'
+    : `${sm.method}${sm.iterations != null ? `×${sm.iterations}` : ''}`;
+  const dec = p.decimation || {};
+  const decTxt = dec.method === 'quadric' ? `quadric ${dec.targetRatio}` : 'none';
+  return `전처리 ${p.preprocess?.method ?? '?'} · 추출 ${p.extractor?.name ?? '?'}`
+       + ` · 스무딩 ${smTxt} · 감면 ${decTxt} · minVox ${p.minVoxel ?? '?'}`;
+}
+
+// 하단 변형 토글 바(1 2 3 … on/off) + vpanel 범례(번호 → 옵션 요약).
+function renderVariantBar(variants) {
+  const bar = document.getElementById('variant-bar');
+  bar.innerHTML = '';
+  bar.style.display = variants.length ? 'flex' : 'none';
+  const legend = document.getElementById('variant-legend');
+  if (legend) legend.innerHTML = '';
+  variants.forEach((v, i) => {
+    const summary = summaryOf(v.params);
+    const b = document.createElement('button');
+    b.className = 'vbtn on'; b.textContent = String(i + 1);
+    b.title = `${v.variantId}\n${summary}`;
+    b.onclick = () => {
+      const on = !b.classList.contains('on');
+      b.classList.toggle('on', on);
+      viewer.setVisible(v.variantId, on);
+    };
+    bar.append(b);
+
+    if (legend) {
+      const row = document.createElement('div');
+      row.className = 'leg-row';
+      row.innerHTML = `<span class="leg-n">${i + 1}</span>` +
+        `<span class="leg-s">${esc(summary || v.variantId)}</span>`;
+      const del = document.createElement('button');
+      del.className = 'leg-del'; del.textContent = '×'; del.title = '이 변형(메쉬) 삭제';
+      del.onclick = async () => {
+        if (!confirm(`변형 ${i + 1}을(를) 삭제할까요?`)) return;
+        const jobId = selectedJob;
+        try {
+          await api.deleteVariant(jobId, v.variantId);
+          if (selectedJob !== jobId) return;
+          showViewer(await api.getStatus(jobId));   // 남은 변형으로 다시 그림
+        } catch (err) { console.error('[deleteVariant]', err); }
+      };
+      row.append(del);
+      legend.append(row);
+    }
   });
 }
 
@@ -305,16 +387,19 @@ function walkEntry(entry, out) {
   });
 }
 
-// ---------- 옵션 폼 → 변형 생성 ----------
+// ---------- 옵션 폼 → 변형 생성 (뷰어패널, done 이후 비교용) ----------
+const vpanelForm = buildOptionsForm();
+document.getElementById('vpanel-opts').append(vpanelForm.root);
 document.getElementById('gen-variant').onclick = async () => {
   const btn = document.getElementById('gen-variant');
   const st = document.getElementById('gen-status');
   if (btn.disabled || !selectedJob) return;
   btn.disabled = true; st.textContent = '생성 중…';
   try {
-    const { variantId } = await createVariant(selectedJob, collectParams());
+    const { variantId } = await createVariant(selectedJob, vpanelForm.collect());
     await refreshJobs();
-    await viewer.showVariant(selectedJob, variantId);   // 새 변형으로 갱신
+    const s = await api.getStatus(selectedJob);   // 새 변형 포함 상태로 전체 리로드
+    showViewer(s);
     st.textContent = variantId;
   } catch (err) {
     st.textContent = err.message || '생성 실패';
@@ -322,6 +407,58 @@ document.getElementById('gen-variant').onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// ---------- 옵션 큐 → 일괄 생성 ----------
+// 여러 옵션 세트를 큐에 쌓아 한 번에 변형 생성(서버 POST /variants 순차 호출, dedup됨).
+const variantQueue = [];
+function renderQueue() {
+  const el = document.getElementById('queue-list');
+  el.innerHTML = '';
+  const batchBtn = document.getElementById('gen-batch');
+  batchBtn.style.display = variantQueue.length ? 'block' : 'none';
+  batchBtn.textContent = `큐 일괄 생성 (${variantQueue.length})`;
+  variantQueue.forEach((p, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'queue-chip';
+    chip.innerHTML = `<span>${esc(summaryOf(p))}</span>`;
+    const x = document.createElement('button');
+    x.textContent = '×'; x.title = '큐에서 제거';
+    x.onclick = () => { variantQueue.splice(i, 1); renderQueue(); };
+    chip.append(x);
+    el.append(chip);
+  });
+}
+document.getElementById('queue-add').onclick = () => {
+  variantQueue.push(vpanelForm.collect());
+  renderQueue();
+};
+document.getElementById('gen-batch').onclick = async () => {
+  const btn = document.getElementById('gen-batch');
+  const st = document.getElementById('gen-status');
+  if (btn.disabled || !selectedJob || !variantQueue.length) return;
+  const jobId = selectedJob;
+  btn.disabled = true;
+  const total = variantQueue.length;
+  let ok = 0;
+  for (const p of variantQueue) {
+    st.textContent = `일괄 생성 중… ${ok + 1}/${total}`;
+    try { await createVariant(jobId, p); ok++; }
+    catch (err) { console.error('[batch]', err); }
+  }
+  variantQueue.length = 0; renderQueue();
+  if (selectedJob === jobId) {
+    await refreshJobs();
+    showViewer(await api.getStatus(jobId));
+  }
+  st.textContent = `일괄 생성 완료 (${ok}/${total})`;
+  btn.disabled = false;
+};
+
+// ---------- 뷰어 표시 컨트롤 (반투명·빅뱅) ----------
+const transparentEl = document.getElementById('transparent');
+if (transparentEl) transparentEl.onchange = (e) => viewer.setTransparent(e.target.checked);
+const bigbangEl = document.getElementById('bigbang');
+if (bigbangEl) bigbangEl.oninput = (e) => viewer.setBigbang(Number(e.target.value));
 
 // ---------- DICOM 메타 info 패널 ----------
 const dicomOverlay = document.getElementById('dicom-info-overlay');

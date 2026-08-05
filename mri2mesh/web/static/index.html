@@ -20,18 +20,22 @@
   .new-btn { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
              padding: 6px 10px; font-size: 12px; cursor: pointer; }
   #joblist { overflow-y: auto; flex: 1; padding: 8px; }
-  .job { padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer;
-         border: 1px solid transparent; }
+  .job { position: relative; padding: 10px 12px; padding-right: 52px; border-radius: 8px;
+         margin-bottom: 6px; cursor: pointer; border: 1px solid transparent; }
   .job:hover { background: #202020; }
   .job.active { background: #22314f; border-color: #2d6cdf; }
-  .job .name { font-size: 13px; margin-bottom: 6px; font-family: monospace; }
+  .job .name { font-size: 13px; margin-bottom: 4px; }
+  .job .jid { font-size: 10px; color: #667; font-family: monospace; margin-bottom: 6px;
+              user-select: all; }
   .job .row { display: flex; align-items: center; gap: 8px; }
-  .job-del { float: right; background: transparent; border: 0; color: #666; cursor: pointer;
-             font-size: 14px; line-height: 1; padding: 0 2px; }
-  .job-del:hover { color: #f87171; }
-  .job-info { float: right; background: transparent; border: 0; color: #789;
-              cursor: pointer; font-size: 12px; padding: 0 4px; }
-  .job-info:hover { color: #38bdf8; }
+  .job-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px;
+                 align-items: center; }
+  .job-del { background: transparent; border: 0; color: #888; cursor: pointer;
+             font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+  .job-del:hover { color: #f87171; background: #2a1414; }
+  .job-info { background: transparent; border: 0; color: #8ab; cursor: pointer;
+              font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+  .job-info:hover { color: #38bdf8; background: #0e2a3a; }
   .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
   .chip.done   { background: #14361f; color: #4ade80; }
   .chip.run    { background: #3a2e0e; color: #fbbf24; }
@@ -80,15 +84,56 @@
 
   /* 뷰어 패널 */
   #vpanel { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55);
-            padding: 12px; border-radius: 8px; font-size: 12px; width: 200px;
-            pointer-events: auto; }
+            padding: 12px; border-radius: 8px; font-size: 12px; width: 300px;
+            max-height: calc(100vh - 24px); overflow-y: auto; pointer-events: auto; }
   #vpanel label { display: block; margin: 3px 0; }
   #metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
              white-space: pre; }
+  #vpanel .slider-row { display: block; margin-top: 8px; font-size: 12px; }
+  #vpanel #bigbang { width: 100%; margin-top: 4px; }
+  .opt-subtitle { font-size: 11px; color: #99a; margin: 10px 0 4px; font-weight: 600; }
+  #groups label { display: block; margin: 3px 0; font-size: 12px; }
+
+  /* 변형 범례 (번호 → 옵션 요약) */
+  #variant-legend .leg-row { display: flex; gap: 8px; align-items: flex-start; margin: 5px 0; }
+  .leg-del { flex: 0 0 auto; margin-left: auto; background: transparent; border: 0; color: #866;
+             cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 4px; }
+  .leg-del:hover { color: #f87171; background: #2a1414; }
+  .leg-n { flex: 0 0 auto; min-width: 20px; height: 20px; border-radius: 6px;
+           background: #22314f; color: #cfe0ff; border: 1px solid #2d6cdf;
+           font-size: 12px; font-weight: 600; text-align: center; line-height: 20px; }
+  .leg-s { font-size: 11px; color: #9fb0c0; line-height: 1.4; }
+
+  /* 하단 변형 토글 바 */
+  #variant-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+                 display: none; gap: 6px; z-index: 5; pointer-events: auto;
+                 background: rgba(0,0,0,.55); padding: 8px 10px; border-radius: 10px; }
+  .vbtn { min-width: 34px; height: 34px; border-radius: 8px; border: 1px solid #333;
+          background: #1a1a1a; color: #778; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .vbtn:hover { border-color: #3a4a6a; }
+  .vbtn.on { background: #22314f; border-color: #2d6cdf; color: #cfe0ff; }
   #mesh-options { margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
-  .opt-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-size: 11px; }
-  .opt-row select, .opt-row input { background: #111; color: #eee; border: 1px solid #333;
-                                     border-radius: 5px; font-size: 11px; }
+  .opt-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #cdd; }
+  .gen-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .gen-actions .primary, .gen-actions .ghost { margin-top: 0; padding: 8px 10px; font-size: 12px; }
+  #queue-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .queue-chip { display: flex; gap: 6px; align-items: flex-start; font-size: 11px;
+                color: #9fb0c0; background: #16233c; border: 1px solid #24406a;
+                border-radius: 6px; padding: 4px 6px; }
+  .queue-chip button { margin-left: auto; background: transparent; border: 0; color: #97a;
+                       cursor: pointer; font-size: 13px; line-height: 1; }
+  .queue-chip button:hover { color: #f87171; }
+
+  /* 옵션 폼 (options.js buildOptionsForm) — 시리즈 화면·뷰어패널 공용 */
+  .mesh-opts { display: flex; flex-direction: column; gap: 12px; }
+  .opt-axis { display: flex; flex-direction: column; gap: 4px; }
+  .opt-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .opt-label { font-size: 12px; font-weight: 600; color: #dde; flex: 1 0 auto; }
+  .opt-unit { font-size: 11px; color: #789; }
+  .opt-head select, .opt-head input { background: #111; color: #eee; border: 1px solid #333;
+    border-radius: 5px; font-size: 12px; padding: 3px 5px; }
+  .opt-head input[type=number] { width: 62px; }
+  .opt-help { font-size: 11px; color: #8a929c; line-height: 1.45; }
 
   /* 모달 */
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none;
@@ -149,43 +194,32 @@
   <div id="stage-error" class="panel" style="display:none"></div>
 
   <div id="vpanel" style="display:none">
+    <div class="opt-title">변형 (옵션별 산출)</div>
+    <div id="variant-legend"></div>
+    <div class="opt-title" style="margin-top:12px">표시</div>
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
+    <label class="slider-row">빅뱅 (explode)
+      <input type="range" id="bigbang" min="0" max="1" step="0.02" value="0">
+    </label>
+    <div class="opt-subtitle">영역 (group / side)</div>
     <div id="groups"></div>
     <div id="metrics"></div>
     <div id="mesh-options">
-      <div class="opt-row">
-        <label>preprocess
-          <select id="opt-preprocess"><option>none</option><option>gaussian</option><option>distance</option></select>
-        </label>
+      <div class="opt-title">비교 변형 생성</div>
+      <div id="vpanel-opts"></div>
+      <div class="gen-actions">
+        <button id="gen-variant" class="primary">변형 생성</button>
+        <button id="queue-add" class="ghost">＋ 큐에 추가</button>
       </div>
-      <div class="opt-row">
-        <label>extractor
-          <select id="opt-extractor">
-            <option>vtk_contour_perlabel</option><option>skimage_mc</option><option>pymcubes</option>
-            <option>vtk_flyingedges</option><option>vtk_surfacenets</option>
-          </select>
-        </label>
-      </div>
-      <div class="opt-row">
-        <label>smoothing
-          <select id="opt-smoothing"><option>laplacian</option><option>none</option><option>taubin</option><option>humphrey</option></select>
-        </label>
-        <label>iter <input id="opt-iterations" type="number" value="30" min="0" max="100" style="width:56px"></label>
-      </div>
-      <div class="opt-row">
-        <label>decimation
-          <select id="opt-decimation"><option>none</option><option>quadric</option></select>
-        </label>
-        <label>ratio <input id="opt-ratio" type="number" value="0.35" min="0.05" max="1" step="0.05" style="width:56px"></label>
-      </div>
-      <div class="opt-row">
-        <label>minVoxel <input id="opt-minvoxel" type="number" value="100" min="0" max="5000" style="width:64px"></label>
-      </div>
-      <button id="gen-variant" class="primary" style="margin-top:0">변형 생성</button>
+      <div id="queue-list"></div>
+      <button id="gen-batch" class="primary" style="display:none;margin-top:6px">큐 일괄 생성</button>
       <div id="gen-status" class="sub"></div>
     </div>
   </div>
 </div>
+
+<!-- ============ 하단 변형 토글 바 (1 2 3 … on/off) ============ -->
+<div id="variant-bar"></div>
 
 <!-- ============ 업로드 모달 ============ -->
 <div id="overlay">

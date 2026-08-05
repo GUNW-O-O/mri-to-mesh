@@ -120,6 +120,9 @@ class AppConfig:
 
 class SeriesSelection(BaseModel):
     seriesIndex: int
+    # 시리즈와 함께 고른 메쉬 파라미터. None이면 baseline(프로덕션 기준값)으로
+    # 첫 변형을 만든다. 세그멘테이션은 이 값과 무관하게 항상 동일하게 돈다.
+    params: dict | None = None
 
 
 def _checked_job_paths(jobs_root: Path, job_id: str) -> JobPaths:
@@ -233,6 +236,15 @@ def create_app(config: AppConfig) -> FastAPI:
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
 
+        # 메쉬 파라미터를 여기서 파싱해 잘못된 입력이면 즉시 400을 준다(백그라운드로
+        # 넘어가기 전에). None이면 파이프라인이 baseline으로 채운다.
+        mesh_params = None
+        if sel.params is not None:
+            try:
+                mesh_params = parse_mesh_params(sel.params)
+            except ValueError:
+                raise HTTPException(400, "잘못된 메쉬 파라미터")
+
         # 버튼 연타·반복 POST가 같은 출력 폴더에서 FastSurfer를 중복 실행하지
         # 못하게, 잡별 lock 안에서 상태 확인과 running 전환을 한 동작으로 묶는다.
         # 프로세스 하나인 로컬 워크벤치 범위의 lock이다.
@@ -262,6 +274,7 @@ def create_app(config: AppConfig) -> FastAPI:
                 run_segmentation_and_mesh(
                     paths, Path(selected_nifti), config.fastsurfer_image,
                     threads=config.threads, fastsurfer_runner=config.fastsurfer_runner,
+                    params=mesh_params,
                     jobs_root=config.jobs_root, host_jobs_root=config.host_jobs_root,
                 )
             except Exception as exc:  # noqa: BLE001 — 잡을 running에 남기지 않는다
@@ -291,6 +304,26 @@ def create_app(config: AppConfig) -> FastAPI:
                 # 예외 메시지에는 seg 경로가 섞일 수 있어(PHI) HTTP 본문엔 안 담는다
                 raise HTTPException(422, "메쉬를 생성하지 못했습니다")
 
+    @app.delete("/api/jobs/{job_id}/variants/{variant_id}")
+    def delete_variant(job_id: str, variant_id: str) -> dict:
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        if not paths.status_file.is_file():
+            raise HTTPException(404, "job 없음")
+        vdir = _confined_child(paths.mesh_dir, variant_id, "variant_id")
+        # status 갱신과 폴더 삭제를 잡별 lock 안에서 — 동시 변형 생성/삭제가
+        # variants 목록을 깨뜨리지 않게.
+        lock = series_locks.setdefault(job_id, Lock())
+        with lock:
+            status = read_status(paths)
+            kept = [v for v in status.variants if v["variantId"] != variant_id]
+            if len(kept) == len(status.variants):
+                raise HTTPException(404, "변형 없음")
+            status.variants = kept
+            write_status(paths, status)
+            if vdir.is_dir():
+                shutil.rmtree(vdir)
+        return {"deleted": variant_id}
+
     @app.get("/api/jobs/{job_id}/variants/{variant_id}/regions.glb")
     def glb(job_id: str, variant_id: str) -> FileResponse:
         paths = _checked_job_paths(config.jobs_root, job_id)
@@ -307,6 +340,17 @@ def create_app(config: AppConfig) -> FastAPI:
         p = vdir / "regions-meta.json"
         if not p.is_file():
             raise HTTPException(404, "meta 없음")
+        return FileResponse(p, media_type="application/json")
+
+    @app.get("/api/jobs/{job_id}/variants/{variant_id}/params.json")
+    def variant_params(job_id: str, variant_id: str) -> FileResponse:
+        # 변형이 무슨 옵션으로 산출됐는지(사람이 읽을 요약의 원천). 메쉬 파라미터
+        # 뿐이라 PHI 아님. 옛 잡은 status.variants에 params가 없어도 이 파일은 있다.
+        paths = _checked_job_paths(config.jobs_root, job_id)
+        vdir = _confined_child(paths.mesh_dir, variant_id, "variant_id")
+        p = vdir / "params.json"
+        if not p.is_file():
+            raise HTTPException(404, "params 없음")
         return FileResponse(p, media_type="application/json")
 
     @app.get("/", response_class=HTMLResponse)

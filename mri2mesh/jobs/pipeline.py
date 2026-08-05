@@ -139,10 +139,14 @@ def run_segmentation_and_mesh(
     threads: int = 8,
     fastsurfer_runner=None,
     table=None,
+    params=None,
     jobs_root: Path | None = None,
     host_jobs_root: Path | None = None,
 ) -> JobStatus:
-    """선택 후: segment → remap → mesh(기본 변형) → 4파일. 실패는 PHI-안전 기록.
+    """선택 후: segment → remap → mesh(첫 변형) → 4파일. 실패는 PHI-안전 기록.
+
+    params: 사용자가 시리즈 선택 화면에서 고른 메쉬 파라미터(MeshParams).
+        None이면 baseline_params()(brainds 프로덕션 기준값)로 첫 변형을 만든다.
 
     jobs_root/host_jobs_root: api가 컨테이너 안에서 돌 때, 형제 FastSurfer
         컨테이너의 `-v` 인자를 호스트 경로로 바꾸기 위한 짝(Task 1
@@ -206,7 +210,7 @@ def run_segmentation_and_mesh(
     write_status(paths, status)
 
     try:
-        params = baseline_params()
+        params = params or baseline_params()
         # variantId를 파라미터 해시로 먼저 계산해(스펙 §7) 바로 올바른 폴더에
         # 생성한다 — 임시 폴더에 썼다가 옮기는 우회가 필요 없다.
         variant_id = params.variant_id(1)
@@ -230,9 +234,16 @@ def run_segmentation_and_mesh(
         "variantId": variant.variant_id,
         "bytes": variant.metrics["glbBytes"],
         "createdAt": variant.params["createdAt"],
+        "params": _variant_params_view(variant.params),
     }]
     write_status(paths, status)
     return read_status(paths)
+
+
+def _variant_params_view(p: dict) -> dict:
+    """status.variants에 실을 표시용 파라미터부(사용자가 고른 축만). segSource·
+    labelTable·variantId·createdAt는 뺀다(PHI/중복 회피, 표시에 불필요)."""
+    return {k: p[k] for k in ("preprocess", "extractor", "smoothing", "decimation", "minVoxel") if k in p}
 
 
 def _image_version(image: str) -> str:
@@ -274,6 +285,7 @@ def add_variant(paths: JobPaths, params, *, table=None) -> dict:
         "variantId": variant.variant_id,
         "bytes": variant.metrics["glbBytes"],
         "createdAt": variant.params["createdAt"],
+        "params": _variant_params_view(variant.params),
     })
     write_status(paths, status)
     return {"variantId": variant.variant_id, "deduped": False}

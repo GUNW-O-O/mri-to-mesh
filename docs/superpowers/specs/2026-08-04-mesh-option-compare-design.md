@@ -193,3 +193,19 @@ A와 B가 이 툴의 목적을 완성한다. C는 여유 될 때.
 - `mri2mesh/web/static/index.html` — 옵션 폼·프리셋 버튼·슬롯 배지 자리.
 - `mri2mesh/web/static/app.js` — 컨트롤러에 옵션 폼·슬롯 선택 배선.
 - `tests/web/test_app.py` — `POST /variants` 계약(검증·중복·PHI·done 전제) 테스트.
+
+---
+
+## 부록: 구현 갱신 (2026-08-05)
+
+Phase B를 구현하며 사용자 피드백으로 방향을 조정:
+
+- **캔버스 가로분할(scissor) 폐기 → pan-row.** 렌더러·scene·카메라 하나로,
+  변형들을 world-mm 그대로 **한 scene에 일렬 배치**하고 OrbitControls **pan을
+  켜서** 옆 변형으로 이동하며 본다. 슬롯별 별도 viewport/카메라 동기화 불필요.
+- **하단 변형 토글 바(1 2 3 …).** 각 변형 on/off. 보이는 것만 좌→우로 촘촘히
+  재배치(꺼진 건 자리 안 차지), 매번 카메라 리프레임.
+- **내부 확인 = 빅뱅(explode).** clipping 안 함("메쉬 외부만 완벽하면 됨").
+  각 영역을 브레인 중심에서 상대거리 비례로 바깥 이동(vpanel 슬라이더).
+  영역별 외부면을 분리해 확인.
+- 조건 프리셋(노화/치매/알콜)·잡 간 비교(Phase C)는 여전히 deferred.

@@ -120,6 +120,98 @@ def test_series_selection_runs_pipeline_to_done(tmp_path):
     assert len(s["variants"]) == 1
 
 
+def _run_to_done(client, tmp_path, jid, holder, params=None):
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    body = {"seriesIndex": 0}
+    if params is not None:
+        body["params"] = params
+    r = client.post(f"/api/jobs/{jid}/series", json=body)
+    assert r.status_code == 200, r.text
+    for _ in range(50):
+        s = client.get(f"/api/jobs/{jid}").json()
+        if s["state"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    return s
+
+
+def test_series_selection_custom_params_used(tmp_path):
+    """시리즈와 함께 보낸 메쉬 파라미터가 첫 변형에 반영된다 — baseline과 다른
+    옵션은 파라미터 해시가 달라 variantId가 달라진다."""
+    client, holder = _client(tmp_path)
+    base_jid = client.post("/api/jobs", files={"files": ("a.nii.gz", _nifti_bytes())}).json()["jobId"]
+    base = _run_to_done(client, tmp_path, base_jid, holder)
+    assert base["state"] == "done", base.get("error")
+
+    cust_jid = client.post("/api/jobs", files={"files": ("b.nii.gz", _nifti_bytes())}).json()["jobId"]
+    # minVoxel을 baseline(100)에서 바꾼다 → 다른 해시
+    cust = _run_to_done(client, tmp_path, cust_jid, holder, params={
+        "preprocess": {"method": "none"},
+        "extractor": {"name": "vtk_contour_perlabel"},
+        "smoothing": {"method": "laplacian", "iterations": 30},
+        "decimation": {"method": "none", "targetRatio": 0.35},
+        "minVoxel": 250,
+    })
+    assert cust["state"] == "done", cust.get("error")
+    assert cust["variants"][0]["variantId"] != base["variants"][0]["variantId"]
+    # 고른 옵션이 변형에 기록돼 UI가 "무슨 옵션으로 뽑았나"를 표시할 수 있다
+    assert cust["variants"][0]["params"]["minVoxel"] == 250
+    assert base["variants"][0]["params"]["minVoxel"] == 100
+
+
+def test_variant_params_json_served(tmp_path):
+    """변형이 무슨 옵션으로 산출됐는지 params.json으로 확인 가능 — UI 범례의 원천.
+    옛 잡(status에 params 없음)도 이 파일로 요약을 복구한다."""
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("a.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = _run_to_done(client, tmp_path, jid, holder)
+    assert s["state"] == "done", s.get("error")
+    vid = s["variants"][0]["variantId"]
+
+    r = client.get(f"/api/jobs/{jid}/variants/{vid}/params.json")
+    assert r.status_code == 200
+    p = r.json()
+    assert p["minVoxel"] == 100
+    assert p["extractor"]["name"]  # 옵션이 사람이 읽을 형태로 존재
+    # 없는 변형은 404
+    assert client.get(f"/api/jobs/{jid}/variants/v99-zzzz/params.json").status_code == 404
+
+
+def test_delete_variant_removes_it(tmp_path):
+    """변형(메쉬 산출) 하나만 삭제 — status에서 빠지고 폴더도 지워진다.
+    없는 변형은 404."""
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("a.nii.gz", _nifti_bytes())}).json()["jobId"]
+    s = _run_to_done(client, tmp_path, jid, holder)
+    assert s["state"] == "done", s.get("error")
+    # 두 번째 변형 추가
+    r = client.post(f"/api/jobs/{jid}/variants", json={"minVoxel": 300})
+    assert r.status_code == 200, r.text
+    vid2 = r.json()["variantId"]
+    vdir2 = tmp_path / "jobs" / jid / "mesh" / vid2
+    assert vdir2.is_dir()
+
+    d = client.delete(f"/api/jobs/{jid}/variants/{vid2}")
+    assert d.status_code == 200
+    left = [v["variantId"] for v in client.get(f"/api/jobs/{jid}").json()["variants"]]
+    assert vid2 not in left and len(left) == 1
+    assert not vdir2.exists()
+    # 이미 지운 것 재삭제 → 404
+    assert client.delete(f"/api/jobs/{jid}/variants/{vid2}").status_code == 404
+
+
+def test_series_selection_bad_params_returns_400(tmp_path):
+    """잘못된 메쉬 파라미터는 백그라운드로 넘어가기 전에 400."""
+    client, holder = _client(tmp_path)
+    jid = client.post("/api/jobs", files={"files": ("c.nii.gz", _nifti_bytes())}).json()["jobId"]
+    holder["fs_dir"] = tmp_path / "jobs" / jid / "fs"
+    r = client.post(f"/api/jobs/{jid}/series",
+                    json={"seriesIndex": 0, "params": {"preprocess": "not-a-dict"}})
+    assert r.status_code == 400
+    # 여전히 시리즈 선택 대기 — 잘못된 요청이 잡을 running으로 바꾸지 않는다
+    assert client.get(f"/api/jobs/{jid}").json()["state"] == "awaiting_series"
+
+
 def test_served_status_has_no_niftipath(tmp_path):
     client, _ = _client(tmp_path)
     jid = client.post("/api/jobs", files={"files": ("scan.nii.gz", _nifti_bytes())}).json()["jobId"]
