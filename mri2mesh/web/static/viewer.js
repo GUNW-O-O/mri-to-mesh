@@ -37,6 +37,7 @@ export class Viewer {
     this.slots = [];          // {variantId, root, meta, meshes[], visible}
     this.transparent = false;
     this.bigbang = 0;
+    this._presetSet = null;   // 조건 프리셋 영역 집합(null=해제)
     this.loadGeneration = 0;
     // 영역 group/side 토글 — 전 슬롯에 동시 적용(변형들은 같은 라벨표라 영역 집합
     // 이 동일하다). 최종 mesh.visible = group AND side.
@@ -133,7 +134,7 @@ export class Viewer {
       const region = byNode.get(o.name);
       o.userData.region = region || null;          // group/side 토글용
       o.userData.color = region ? region.color : [200, 200, 200];
-      o.material = this._makeMaterial(o.userData.color);
+      o.material = this._makeMaterial(o);
       meshes.push(o);
     });
 
@@ -148,7 +149,8 @@ export class Viewer {
     return { variantId, root, meta, meshes, visible: true };
   }
 
-  _makeMaterial(c) {
+  _makeMaterial(mesh) {
+    const c = mesh.userData.color;
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255),
       side: THREE.DoubleSide,
@@ -156,6 +158,14 @@ export class Viewer {
       opacity: this.transparent ? 0.12 : 1.0,
       depthWrite: !this.transparent,
     });
+  }
+
+  // 조건 프리셋 적용. 프리셋 영역만 보이고 나머지는 숨긴다(반투명 아님).
+  // set이 null이면 해제(group/side 토글 상태로 복귀). 가시성으로 처리해
+  // _updateVisibility가 group/side와 함께 계산한다.
+  setPreset(regionNameSet) {
+    this._presetSet = regionNameSet || null;
+    this._updateVisibility();
   }
 
   // 보이는 슬롯만 좌→우로 촘촘히 재배치(꺼진 건 자리 안 차지).
@@ -215,7 +225,7 @@ export class Viewer {
   setTransparent(on) {
     this.transparent = on;
     for (const s of this._allBrains()) {
-      for (const m of s.meshes) m.material = this._makeMaterial(m.userData.color);
+      for (const m of s.meshes) m.material = this._makeMaterial(m);
     }
   }
 
@@ -245,14 +255,17 @@ export class Viewer {
     }
   }
 
-  // group·side 토글을 전 슬롯의 모든 영역 메시에 동시 적용(최종 = group AND side).
+  // 최종 가시성 = group AND side AND 프리셋. 프리셋이 켜져 있으면 프리셋에 없는
+  // 영역(매칭 안 된 메시 포함)은 숨긴다.
   _updateVisibility() {
     for (const s of this._allBrains()) {
       for (const m of s.meshes) {
         const reg = m.userData.region;
-        m.visible = !reg
+        const groupSide = !reg
           || (this.groupChecked.get(reg.group) !== false
               && this.sideChecked.get(reg.side) !== false);
+        const presetOk = !this._presetSet || (reg && this._presetSet.has(reg.name));
+        m.visible = groupSide && presetOk;
       }
     }
   }
@@ -308,7 +321,7 @@ export class Viewer {
       p.box = new THREE.Box3().setFromObject(slot.root);       // 원본 크기(정규화 기준)
       p.scene.add(slot.root);
       // 새 창에도 현재 표기 상태 반영
-      for (const m of slot.meshes) m.material = this._makeMaterial(m.userData.color);
+      for (const m of slot.meshes) m.material = this._makeMaterial(m);
       this.setBigbang(this.bigbang);
       if (!this._groupsRendered) { this._renderGroups(); this._groupsRendered = true; }
       this._updateVisibility();
@@ -317,7 +330,9 @@ export class Viewer {
     this._frameCompare();
   }
 
-  setNormalize(on) { this.normalize = on; this._applyNormalize(); this._frameCompare(); }
+  // 정규화 토글은 스케일만 바꾸고 카메라(보던 방향)는 건드리지 않는다 — 브레인은
+  // 원점 중심으로 스케일되므로 시점이 유지된 채 크기만 변한다.
+  setNormalize(on) { this.normalize = on; this._applyNormalize(); }
 
   // 정규화 ON: 각 창 brain을 공통 크기로(bbox 최대변 → TARGET). OFF: 원본(scale 1).
   _applyNormalize() {
@@ -345,7 +360,10 @@ export class Viewer {
       p.brain.root.position.sub(c);
       radius = Math.max(radius, size.x, size.y, size.z);
     }
-    const dist = radius * 2.5, el = Math.PI / 9;
+    // 각 창을 자기 반쪽에 꽉 차게(거리 축소). 브레인은 원점 중심 유지 — 안쪽으로
+    // 옮기면 OrbitControls pivot이 브레인 밖으로 벗어나 좌우 회전이 축을 틀며
+    // 돌아버린다(빙글빙글). 거리 축소만으로 두 창을 크게·가깝게 보인다.
+    const dist = radius * 2.2, el = Math.PI / 9;
     for (const side of ['L', 'R']) {
       const cam = this.panes[side].camera;
       if (!cam) continue;
@@ -372,10 +390,16 @@ export class Viewer {
     const w = this.renderer.domElement.width / devicePixelRatio;
     const h = this.renderer.domElement.height / devicePixelRatio;
     const halfW = w / 2;
+    // 이미지를 안쪽(분할선 쪽)으로 민다 — 카메라 pose/pivot은 그대로라 회전은
+    // 브레인 중심 기준으로 깨끗이 돈다(빙글빙글 방지). offsetX>0은 화면 왼쪽으로
+    // 밀리므로, 왼창은 -(오른쪽=중앙), 오른창은 +(왼쪽=중앙)로.
+    const shift = halfW * 0.22;
     this.renderer.setScissorTest(true);
     const draw = (side, x) => {
       const p = this.panes[side];
-      p.camera.aspect = halfW / h; p.camera.updateProjectionMatrix();
+      p.camera.aspect = halfW / h;
+      p.camera.setViewOffset(halfW, h, side === 'L' ? -shift : shift, 0, halfW, h);
+      p.camera.updateProjectionMatrix();
       this.renderer.setViewport(x, 0, halfW, h);
       this.renderer.setScissor(x, 0, halfW, h);
       this.renderer.render(p.scene, p.camera);

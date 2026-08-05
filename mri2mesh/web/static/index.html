@@ -16,7 +16,7 @@
              border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; }
   #sidebar header { padding: 14px 16px; border-bottom: 1px solid #2a2a2a;
                     display: flex; align-items: center; justify-content: space-between; }
-  #sidebar header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  #sidebar header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .3px; }
   .new-btn { background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
              padding: 6px 10px; font-size: 12px; cursor: pointer; }
   #joblist { overflow-y: auto; flex: 1; padding: 8px; }
@@ -24,8 +24,8 @@
          margin-bottom: 6px; cursor: pointer; border: 1px solid transparent; }
   .job:hover { background: #202020; }
   .job.active { background: #22314f; border-color: #2d6cdf; }
-  .job .name { font-size: 13px; margin-bottom: 4px; }
-  .job .jid { font-size: 10px; color: #667; font-family: monospace; margin-bottom: 6px;
+  .job .name { font-size: 15px; margin-bottom: 4px; }
+  .job .jid { font-size: 12px; color: #8a93a0; font-family: monospace; margin-bottom: 6px;
               user-select: all; }
   .job .row { display: flex; align-items: center; gap: 8px; }
   .job-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px;
@@ -36,7 +36,7 @@
   .job-info { background: transparent; border: 0; color: #8ab; cursor: pointer;
               font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
   .job-info:hover { color: #38bdf8; background: #0e2a3a; }
-  .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .chip { font-size: 12px; padding: 3px 9px; border-radius: 10px; font-weight: 600; }
   .chip.done   { background: #14361f; color: #4ade80; }
   .chip.run    { background: #3a2e0e; color: #fbbf24; }
   .chip.await  { background: #0e2a3a; color: #38bdf8; }
@@ -95,6 +95,8 @@
              white-space: pre; }
   #vpanel .slider-row { display: block; margin-top: 8px; font-size: 12px; }
   #vpanel #bigbang { width: 100%; margin-top: 4px; }
+  #vpanel #preset { width: 100%; margin-top: 4px; background: #111; color: #eee;
+                    border: 1px solid #333; border-radius: 5px; font-size: 12px; }
   .opt-subtitle { font-size: 11px; color: #99a; margin: 10px 0 4px; font-weight: 600; }
   #groups label { display: block; margin: 3px 0; font-size: 12px; }
 
@@ -171,9 +173,13 @@
   button:disabled { cursor: wait; opacity: .55; }
 
   /* ---------- 에셋 비교 모드 ---------- */
-  #compare-bar { position: fixed; top: 12px; left: 300px; right: 12px; z-index: 6;
-                 display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
-                 pointer-events: auto; }
+  /* 가운데 정렬 클러스터 — 좌드롭다운·정규화·우드롭다운. 좌측 vpanel과 겹치지 않게
+     left:300px 대신 화면 중앙에 둔다(분할선 근처에 컨트롤을 모은다). */
+  #scissor-divider { position: fixed; top: 0; bottom: 0; left: 50%; width: 2px;
+                     transform: translateX(-1px); background: rgba(255,255,255,.20);
+                     z-index: 4; pointer-events: none; display: none; }
+  #compare-bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6;
+                 display: flex; gap: 12px; align-items: center; pointer-events: auto; }
   .cmp-pane { display: flex; gap: 6px; background: rgba(0,0,0,.55); padding: 8px; border-radius: 8px; }
   .cmp-pane select { background: #111; color: #eee; border: 1px solid #333; border-radius: 5px;
                      font-size: 12px; max-width: 160px; }
@@ -209,6 +215,8 @@
   <div id="stage-progress" class="panel" style="display:none"></div>
   <div id="stage-error" class="panel" style="display:none"></div>
 
+  <div id="scissor-divider"></div>
+
   <div id="compare-bar" style="display:none">
     <div class="cmp-pane" data-side="L">
       <select class="cmp-job"></select><select class="cmp-variant"></select>
@@ -226,6 +234,9 @@
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
     <label class="slider-row">빅뱅 (explode)
       <input type="range" id="bigbang" min="0" max="1" step="0.02" value="0">
+    </label>
+    <label class="slider-row">조건 프리셋 (영역 하이라이트)
+      <select id="preset"><option value="">없음</option></select>
     </label>
     <div class="opt-subtitle">영역 (group / side)</div>
     <div id="groups"></div>
