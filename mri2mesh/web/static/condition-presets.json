@@ -19,7 +19,6 @@
   "알콜": [
     "Left-Hippocampus", "Right-Hippocampus",
     "Left-Cerebellum-Cortex", "Right-Cerebellum-Cortex",
-    "Left-Cerebellum-White-Matter", "Right-Cerebellum-White-Matter",
     "Left-Lateral-Ventricle", "Right-Lateral-Ventricle", "3rd-Ventricle",
     "Left-Thalamus", "Right-Thalamus",
     "Left-VentralDC", "Right-VentralDC",

@@ -508,6 +508,9 @@ document.getElementById('mode-compare').onclick = async () => {
   const legend = document.getElementById('variant-legend');
   if (legend) legend.style.display = compareMode ? 'none' : '';
   if (compareMode) {
+    // compare 진입: 스테이지 패널(빈 화면 안내·시리즈·진행·에러)을 전부 숨긴다.
+    for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
+      document.getElementById(id).style.display = 'none';
     document.getElementById('vpanel').style.display = 'block';
     viewer.enterCompareMode();
     await fillCompareJobs();
