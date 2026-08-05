@@ -107,7 +107,10 @@ function showStage(state) {
   for (const id of ['stage-empty','stage-select','stage-progress','stage-error'])
     document.getElementById(id).style.display = 'none';
   document.getElementById('vpanel').style.display = state==='done' ? 'block' : 'none';
-  if (state !== 'done') viewer.clear();
+  if (state !== 'done') {
+    viewer.clear();
+    document.getElementById('variant-bar').style.display = 'none';
+  }
   const show = map[state];
   if (show) document.getElementById(show).style.display = 'block';
 }
@@ -185,16 +188,36 @@ function renderError(s) {
   el.innerHTML = `<h2>실패 · ${esc(s.step)}</h2><div class="sub">${esc((s.error&&s.error.message)||'')}</div>`;
 }
 
-// ---------- 뷰어 ----------
+// ---------- 뷰어 (다중 변형 일렬 배치) ----------
 function showViewer(s) {
-  const v = s.variants && s.variants[0];
-  if (!v) return;
+  const variants = s.variants || [];
+  if (!variants.length) return;
   const jobId = selectedJob;
-  viewer.showVariant(jobId, v.variantId).catch(err => {
-    console.error('[showVariant]', err);
+  const bb = document.getElementById('bigbang');
+  if (bb) bb.value = 0;                 // 새 로드는 빅뱅 0에서 시작
+  renderVariantBar(variants);
+  viewer.loadVariants(jobId, variants.map(v => v.variantId)).catch(err => {
+    console.error('[loadVariants]', err);
     if (selectedJob !== jobId) return;
     const metrics = document.getElementById('metrics');
     if (metrics) metrics.textContent = '메시 로드 실패';
+  });
+}
+
+// 하단 변형 토글 바: 1 2 3 … 버튼으로 각 변형 on/off. 라벨은 순번, title은 variantId.
+function renderVariantBar(variants) {
+  const bar = document.getElementById('variant-bar');
+  bar.innerHTML = '';
+  bar.style.display = variants.length ? 'flex' : 'none';
+  variants.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.className = 'vbtn on'; b.textContent = String(i + 1); b.title = v.variantId;
+    b.onclick = () => {
+      const on = !b.classList.contains('on');
+      b.classList.toggle('on', on);
+      viewer.setVisible(v.variantId, on);
+    };
+    bar.append(b);
   });
 }
 
@@ -333,7 +356,8 @@ document.getElementById('gen-variant').onclick = async () => {
   try {
     const { variantId } = await createVariant(selectedJob, vpanelForm.collect());
     await refreshJobs();
-    await viewer.showVariant(selectedJob, variantId);   // 새 변형으로 갱신
+    const s = await api.getStatus(selectedJob);   // 새 변형 포함 상태로 전체 리로드
+    showViewer(s);
     st.textContent = variantId;
   } catch (err) {
     st.textContent = err.message || '생성 실패';
@@ -341,6 +365,12 @@ document.getElementById('gen-variant').onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// ---------- 뷰어 표시 컨트롤 (반투명·빅뱅) ----------
+const transparentEl = document.getElementById('transparent');
+if (transparentEl) transparentEl.onchange = (e) => viewer.setTransparent(e.target.checked);
+const bigbangEl = document.getElementById('bigbang');
+if (bigbangEl) bigbangEl.oninput = (e) => viewer.setBigbang(Number(e.target.value));
 
 // ---------- DICOM 메타 info 패널 ----------
 const dicomOverlay = document.getElementById('dicom-info-overlay');

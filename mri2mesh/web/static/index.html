@@ -89,6 +89,17 @@
   #vpanel label { display: block; margin: 3px 0; }
   #metrics { font-family: monospace; font-size: 11px; color: #8ab; margin-top: 8px;
              white-space: pre; }
+  #vpanel .slider-row { display: block; margin-top: 8px; font-size: 12px; }
+  #vpanel #bigbang { width: 100%; margin-top: 4px; }
+
+  /* 하단 변형 토글 바 */
+  #variant-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+                 display: none; gap: 6px; z-index: 5; pointer-events: auto;
+                 background: rgba(0,0,0,.55); padding: 8px 10px; border-radius: 10px; }
+  .vbtn { min-width: 34px; height: 34px; border-radius: 8px; border: 1px solid #333;
+          background: #1a1a1a; color: #778; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .vbtn:hover { border-color: #3a4a6a; }
+  .vbtn.on { background: #22314f; border-color: #2d6cdf; color: #cfe0ff; }
   #mesh-options { margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
   .opt-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #cdd; }
 
@@ -162,8 +173,11 @@
   <div id="stage-error" class="panel" style="display:none"></div>
 
   <div id="vpanel" style="display:none">
+    <div class="opt-title">표시</div>
     <label><input type="checkbox" id="transparent"> 반투명 셸</label>
-    <div id="groups"></div>
+    <label class="slider-row">빅뱅 (explode)
+      <input type="range" id="bigbang" min="0" max="1" step="0.02" value="0">
+    </label>
     <div id="metrics"></div>
     <div id="mesh-options">
       <div class="opt-title">비교 변형 생성</div>
@@ -173,6 +187,9 @@
     </div>
   </div>
 </div>
+
+<!-- ============ 하단 변형 토글 바 (1 2 3 … on/off) ============ -->
+<div id="variant-bar"></div>
 
 <!-- ============ 업로드 모달 ============ -->
 <div id="overlay">
