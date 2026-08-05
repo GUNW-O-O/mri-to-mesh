@@ -165,6 +165,17 @@
   .ghost { background: transparent; color: #aaa; border: 1px solid #333; border-radius: 8px;
            padding: 8px 14px; cursor: pointer; }
   button:disabled { cursor: wait; opacity: .55; }
+
+  /* ---------- 에셋 비교 모드 ---------- */
+  #compare-bar { position: fixed; top: 12px; left: 300px; right: 12px; z-index: 6;
+                 display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+                 pointer-events: auto; }
+  .cmp-pane { display: flex; gap: 6px; background: rgba(0,0,0,.55); padding: 8px; border-radius: 8px; }
+  .cmp-pane select { background: #111; color: #eee; border: 1px solid #333; border-radius: 5px;
+                     font-size: 12px; max-width: 160px; }
+  #normalize-wrap { background: rgba(0,0,0,.55); padding: 8px 12px; border-radius: 8px;
+                    font-size: 12px; pointer-events: auto; align-self: center; }
+  .new-btn.active-mode { background: #2d6cdf !important; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -182,6 +193,7 @@
   <header>
     <h1>mri2mesh</h1>
     <button id="new-job" class="new-btn">+ 새 작업</button>
+    <button id="mode-compare" class="new-btn" style="background:#374151">에셋 비교</button>
   </header>
   <div id="joblist"></div>
 </aside>
@@ -192,6 +204,16 @@
   <div id="stage-select" class="panel" style="display:none"></div>
   <div id="stage-progress" class="panel" style="display:none"></div>
   <div id="stage-error" class="panel" style="display:none"></div>
+
+  <div id="compare-bar" style="display:none">
+    <div class="cmp-pane" data-side="L">
+      <select class="cmp-job"></select><select class="cmp-variant"></select>
+    </div>
+    <label id="normalize-wrap"><input type="checkbox" id="normalize"> 크기 정규화</label>
+    <div class="cmp-pane" data-side="R">
+      <select class="cmp-job"></select><select class="cmp-variant"></select>
+    </div>
+  </div>
 
   <div id="vpanel" style="display:none">
     <div class="opt-title">변형 (옵션별 산출)</div>
