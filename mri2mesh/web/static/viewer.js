@@ -336,7 +336,9 @@ export class Viewer {
     this._frameCompare();
   }
 
-  setNormalize(on) { this.normalize = on; this._applyNormalize(); this._frameCompare(); }
+  // 정규화 토글은 스케일만 바꾸고 카메라(보던 방향)는 건드리지 않는다 — 브레인은
+  // 원점 중심으로 스케일되므로 시점이 유지된 채 크기만 변한다.
+  setNormalize(on) { this.normalize = on; this._applyNormalize(); }
 
   // 정규화 ON: 각 창 brain을 공통 크기로(bbox 최대변 → TARGET). OFF: 원본(scale 1).
   _applyNormalize() {
@@ -364,7 +366,15 @@ export class Viewer {
       p.brain.root.position.sub(c);
       radius = Math.max(radius, size.x, size.y, size.z);
     }
-    const dist = radius * 2.5, el = Math.PI / 9;
+    // 각 창을 자기 반쪽에 꽉 차게(거리 축소) + 안쪽(분할선 쪽)으로 살짝 붙인다.
+    // 카메라 정면(-Z)에서 화면상 +X가 왼쪽이므로, 왼창은 -X(=화면 오른쪽=중앙),
+    // 오른창은 +X(=화면 왼쪽=중앙)로 옮기면 둘이 가운데로 모인다.
+    const INNER = radius * 0.18;
+    for (const side of ['L', 'R']) {
+      const p = this.panes[side];
+      if (p.brain) p.brain.root.position.x += (side === 'L' ? -INNER : INNER);
+    }
+    const dist = radius * 1.9, el = Math.PI / 9;
     for (const side of ['L', 'R']) {
       const cam = this.panes[side].camera;
       if (!cam) continue;
