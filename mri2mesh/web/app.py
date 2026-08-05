@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import shutil
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -141,6 +142,9 @@ def create_app(config: AppConfig) -> FastAPI:
     app = FastAPI(title="mri2mesh")
     config.jobs_root.mkdir(parents=True, exist_ok=True)
     series_locks: dict[str, Lock] = {}
+    # 변형 생성 진행 상태(토큰 → {done,total,variantId,finished,error}). 단일
+    # 프로세스 로컬 도구라 인메모리로 충분. 프론트가 토큰으로 폴링한다.
+    gen_progress: dict[str, dict] = {}
     # 동시 세그멘테이션 상한(GPU 경합 방지). 백그라운드 태스크는 스레드풀에서
     # 돌므로 threading 세마포어로 게이트한다. 초과 잡은 여기서 대기한다.
     seg_semaphore = BoundedSemaphore(max(1, config.max_concurrent_seg))
@@ -299,7 +303,9 @@ def create_app(config: AppConfig) -> FastAPI:
         return {"state": "running"}
 
     @app.post("/api/jobs/{job_id}/variants")
-    def create_variant(job_id: str, payload: dict) -> dict:
+    def create_variant(job_id: str, payload: dict, bg: BackgroundTasks) -> dict:
+        # 변형 메쉬 생성은 라벨 수십~백 개라 수십 초 걸린다 — 백그라운드로 돌리고
+        # 토큰으로 진행(라벨 done/total)을 폴링하게 한다.
         paths = _checked_job_paths(config.jobs_root, job_id)
         if not paths.status_file.is_file():
             raise HTTPException(404, "job 없음")
@@ -308,16 +314,40 @@ def create_app(config: AppConfig) -> FastAPI:
         except ValueError:
             # 메시지에 입력값을 되쏘지 않는다(PHI/안전)
             raise HTTPException(400, "잘못된 메쉬 파라미터")
-        # 같은 잡에서 동시 생성이 순번을 겹치지 않게 잡별 lock으로 묶는다
-        lock = series_locks.setdefault(job_id, Lock())
-        with lock:
-            try:
-                return add_variant(paths, params)
-            except ValueError:
-                raise HTTPException(409, "done 잡에서만 변형을 생성할 수 있다")
-            except GenerateError:
-                # 예외 메시지에는 seg 경로가 섞일 수 있어(PHI) HTTP 본문엔 안 담는다
-                raise HTTPException(422, "메쉬를 생성하지 못했습니다")
+
+        token = uuid.uuid4().hex
+        gen_progress[token] = {"done": 0, "total": 0, "variantId": None,
+                               "deduped": False, "finished": False, "error": None}
+
+        def work():
+            # 같은 잡에서 동시 생성이 순번을 겹치지 않게 잡별 lock으로 묶는다
+            lock = series_locks.setdefault(job_id, Lock())
+            with lock:
+                try:
+                    res = add_variant(
+                        paths, params,
+                        progress_cb=lambda d, t: gen_progress[token].update(done=d, total=t),
+                    )
+                    gen_progress[token].update(
+                        variantId=res["variantId"], deduped=res.get("deduped", False), finished=True)
+                except ValueError:
+                    gen_progress[token].update(error="done 잡에서만 변형을 생성할 수 있다", finished=True)
+                except GenerateError:
+                    # 예외 메시지에 seg 경로가 섞일 수 있어(PHI) 본문엔 안 담는다
+                    gen_progress[token].update(error="메쉬를 생성하지 못했습니다", finished=True)
+                except Exception:  # noqa: BLE001 — 잔여 예외로 토큰이 영원히 미완료로 남지 않게
+                    gen_progress[token].update(error="변형 생성 실패", finished=True)
+
+        bg.add_task(work)
+        return {"token": token}
+
+    @app.get("/api/jobs/{job_id}/variants-progress/{token}")
+    def variant_progress(job_id: str, token: str) -> dict:
+        # 로컬 인메모리 진행 상태(단일 프로세스). 토큰은 추측 불가한 uuid다.
+        p = gen_progress.get(token)
+        if p is None:
+            raise HTTPException(404, "진행 없음")
+        return p
 
     @app.delete("/api/jobs/{job_id}/variants/{variant_id}")
     def delete_variant(job_id: str, variant_id: str) -> dict:

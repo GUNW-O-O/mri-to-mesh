@@ -52,7 +52,8 @@ class VariantResult:
     regions: list
 
 
-def generate_variant(seg_path, out_dir, params: MeshParams, index: int = 1, table=None) -> VariantResult:
+def generate_variant(seg_path, out_dir, params: MeshParams, index: int = 1, table=None,
+                     progress_cb=None) -> VariantResult:
     """canonical seg + params -> 변형 하나. GLB·metrics.json·params.json을 쓴다.
 
     Raises:
@@ -84,7 +85,11 @@ def generate_variant(seg_path, out_dir, params: MeshParams, index: int = 1, tabl
     total_vertices = 0
     durations = {"extract": 0.0, "smooth": 0.0, "decimate": 0.0, "write": 0.0}
 
-    for label_id, voxel_count in sorted(present.items()):
+    items = sorted(present.items())
+    total_labels = len(items)
+    for done_i, (label_id, voxel_count) in enumerate(items, start=1):
+        if progress_cb is not None:
+            progress_cb(done_i, total_labels)   # 라벨 단위 진행(UI 진행바용)
         entry = by_id.get(label_id)
         if entry is None:
             continue  # 표에 없는 값(있으면 안 되지만 방어)

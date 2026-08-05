@@ -246,7 +246,14 @@ function renderError(s) {
 // ---------- 뷰어 (다중 변형 일렬 배치) ----------
 async function showViewer(s) {
   const variants = s.variants || [];
-  if (!variants.length) return;
+  if (!variants.length) {
+    // 세그는 됐는데 변형(메쉬)이 없는 잡 — 빈 캔버스로 헷갈리지 않게 안내.
+    viewer.clear();
+    document.getElementById('variant-bar').style.display = 'none';
+    const m = document.getElementById('metrics');
+    if (m) m.textContent = '메쉬(변형) 없음 — 아래 "변형 생성"으로 만드세요.';
+    return;
+  }
   const jobId = selectedJob;
   // status.variants에 params가 없는 잡(서버 변경 전 생성)은 디스크의 params.json에서
   // 채운다 — 범례가 해시(variantId) 대신 옵션 요약을 보이게.
@@ -445,16 +452,34 @@ function walkEntry(entry, out) {
 // ---------- 옵션 폼 → 변형 생성 (뷰어패널, done 이후 비교용) ----------
 const vpanelForm = buildOptionsForm();
 document.getElementById('vpanel-opts').append(vpanelForm.root);
+
+// 변형 생성 시작 + 진행 폴링. statusEl에 "메쉬 생성 done/total" 라이브 표시.
+// 완료 시 variantId 반환, 실패 시 throw. 생성은 백그라운드(토큰 폴링).
+async function generateWithProgress(jobId, params, statusEl, prefix = '') {
+  const { token } = await createVariant(jobId, params);
+  for (;;) {
+    await new Promise(r => setTimeout(r, 700));
+    let p;
+    try { p = await api.getGenProgress(jobId, token); }
+    catch { continue; }   // 잠깐의 404 등은 재시도
+    if (statusEl) statusEl.textContent = p.total ? `${prefix}메쉬 생성 ${p.done}/${p.total}` : `${prefix}생성 중…`;
+    if (p.finished) {
+      if (p.error) throw new Error(p.error);
+      return p.variantId;
+    }
+  }
+}
+
 document.getElementById('gen-variant').onclick = async () => {
   const btn = document.getElementById('gen-variant');
   const st = document.getElementById('gen-status');
   if (btn.disabled || !selectedJob) return;
   btn.disabled = true; st.textContent = '생성 중…';
+  const jobId = selectedJob;
   try {
-    const { variantId } = await createVariant(selectedJob, vpanelForm.collect());
+    const variantId = await generateWithProgress(jobId, vpanelForm.collect(), st);
     await refreshJobs();
-    const s = await api.getStatus(selectedJob);   // 새 변형 포함 상태로 전체 리로드
-    showViewer(s);
+    if (selectedJob === jobId) showViewer(await api.getStatus(jobId));
     st.textContent = variantId;
   } catch (err) {
     st.textContent = err.message || '생성 실패';
@@ -495,9 +520,8 @@ document.getElementById('gen-batch').onclick = async () => {
   btn.disabled = true;
   const total = variantQueue.length;
   let ok = 0;
-  for (const p of variantQueue) {
-    st.textContent = `일괄 생성 중… ${ok + 1}/${total}`;
-    try { await createVariant(jobId, p); ok++; }
+  for (let i = 0; i < variantQueue.length; i++) {
+    try { await generateWithProgress(jobId, variantQueue[i], st, `일괄 ${i + 1}/${total} · `); ok++; }
     catch (err) { console.error('[batch]', err); }
   }
   variantQueue.length = 0; renderQueue();
