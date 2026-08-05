@@ -54,7 +54,10 @@ async function refreshJobs() {
       try { showDicomInfo(await getDicomMeta(r.jobId)); }
       catch (err) { console.error('[dicomMeta]', err); }
     };
-    div.append(del, info);
+    const actions = document.createElement('div');
+    actions.className = 'job-actions';
+    actions.append(info, del);
+    div.append(actions);
     el.append(div);
   }
   // 진행 중인 잡이 있으면 목록도 계속 갱신

@@ -16,7 +16,12 @@ export class Viewer {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 1000);
+    // brain-educate(Chapter2/3·DualBrain3D)와 동일한 조작감: 관성 댐핑 + 팬 비활성.
+    // _animate가 매 프레임 controls.update()를 부르므로 댐핑이 실제로 동작한다.
     this.controls = new OrbitControls(this.camera, canvas);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.05;
+    this.controls.enablePan = false;
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const d1 = new THREE.DirectionalLight(0xffffff, 1.2); d1.position.set(2, 3, 4); this.scene.add(d1);
@@ -71,10 +76,17 @@ export class Viewer {
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z);
     group.position.sub(center);           // bbox 중심을 원점으로 (스펙 §8)
-    this.camera.position.set(0, 0, radius * 2.2);
+    // 진입 뷰: 정면(얼굴=anterior, 업라이트 회전 후 -Z쪽)에서 약간 위로 내려다봄.
+    // brain-educate Chapter3 진입 각과 동일 취지.
+    const dist = radius * 2.5;
+    const el = Math.PI / 9;               // 20° 위에서
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.set(0, dist * Math.sin(el), -dist * Math.cos(el));
     this.camera.near = radius / 100; this.camera.far = radius * 10;
     this.camera.updateProjectionMatrix();
-    this.controls.target.set(0, 0, 0); this.controls.update();
+    this.controls.target.set(0, 0, 0);
+    this.camera.lookAt(0, 0, 0);
+    this.controls.update();
   }
 
   _applyColors(transparent) {
@@ -113,6 +125,19 @@ export class Viewer {
       if (generation !== this.loadGeneration) return;
       this.meta = meta;
       this.root = gltf.scene;
+      // 정점은 NIfTI world(RAS): +Z=상하(superior), +Y=앞(anterior). three.js up은 +Y라
+      // 그대로 두면 좌우 드래그가 앞뒤축을 중심으로 돌아 '데스롤'처럼 뒤집힌다.
+      // -90° about X로 상하(Z)를 화면 위(+Y)에 맞춰 세워야 brain-educate처럼
+      // 수직축(턴테이블) 회전이 된다.
+      this.root.rotation.x = -Math.PI / 2;
+      // 메시 추출이 ComputeNormalsOff라 GLB에 노멀이 없다 → MeshStandardMaterial이
+      // 음영을 못 내 '무광·어둡게' 보인다(=조명이 없어 보이는 원인). 스무스 노멀을
+      // 계산해 넣어 brain-educate와 같은 음영을 낸다.
+      this.root.traverse(o => {
+        if (o.isMesh && o.geometry && !o.geometry.attributes.normal) {
+          o.geometry.computeVertexNormals();
+        }
+      });
       this.scene.add(this.root);
       this._applyColors(document.getElementById('transparent')?.checked ?? false);
       this._frame(this.root);
