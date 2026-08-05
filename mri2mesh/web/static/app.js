@@ -83,6 +83,11 @@ function scheduleList(){ clearTimeout(listTimer); listTimer = setTimeout(refresh
 async function selectJob(jobId) {
   selectedJob = jobId;
   clearTimeout(pollTimer);
+  // 옵션 큐·생성 상태는 잡별이다 — 다른 잡 고르면 비운다(전 잡 큐가 새 잡에
+  // 적용되는 혼선 방지).
+  variantQueue.length = 0; renderQueue();
+  const genSt = document.getElementById('gen-status');
+  if (genSt) genSt.textContent = '';
   await refreshJobs();
   await renderStage();
 }
