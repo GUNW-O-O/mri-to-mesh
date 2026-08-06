@@ -18,6 +18,7 @@ import nibabel as nib
 import numpy as np
 
 from mri2mesh.labels import load_canonical
+from mri2mesh.mesh.cleanup import drop_small_components
 from mri2mesh.mesh.extract import extract
 from mri2mesh.mesh.glb import write_glb
 from mri2mesh.mesh.metrics import region_metrics, summarize
@@ -98,6 +99,13 @@ def generate_variant(seg_path, out_dir, params: MeshParams, index: int = 1, tabl
             continue
 
         mask = data == label_id
+        # 축0: 작은 연결요소(뇌실주변 파편/스파이크) 제거. none이면 원본 그대로.
+        mask = drop_small_components(mask, params.cleanup)
+        if not mask.any():
+            skipped += 1  # 파편만 있던 라벨 — 남은 게 없다
+            continue
+        # 정리 후 실제 voxel 수로 갱신 — 부피 오차 지표가 메쉬화된 것과 맞아야 한다.
+        voxel_count = int(mask.sum())
 
         t0 = time.perf_counter()
         field, isolevel = apply_preprocess(mask, params.preprocess)

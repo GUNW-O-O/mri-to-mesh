@@ -52,6 +52,18 @@ class Decimation:
 
 
 @dataclass(frozen=True)
+class Cleanup:
+    """축0: 라벨별 연결요소 정리 (뇌실주변 파편/스파이크 제거).
+
+    min_component_vox 미만 조각을 추출 전에 버린다. WM-hypointensities 같은
+    다초점 구조는 임계를 낮게 두면 실제 병변을 살리면서 노이즈만 지운다.
+    """
+
+    method: str = "none"  # none | drop_small_components
+    min_component_vox: int = 30
+
+
+@dataclass(frozen=True)
 class MeshParams:
     """변형 하나의 전체 파라미터."""
 
@@ -59,6 +71,7 @@ class MeshParams:
     extractor: Extractor
     smoothing: Smoothing
     decimation: Decimation
+    cleanup: Cleanup = Cleanup()
     min_voxel: int = 100
     label_table: str = "canonical-v1"
     seg_source: str = ""
@@ -88,11 +101,16 @@ class MeshParams:
         if self.decimation.method == "quadric":
             dec["targetRatio"] = self.decimation.target_ratio
 
+        cln: dict = {"method": self.cleanup.method}
+        if self.cleanup.method == "drop_small_components":
+            cln["minComponentVox"] = self.cleanup.min_component_vox
+
         return {
             "preprocess": pre,
             "extractor": {"name": self.extractor.name, "options": dict(self.extractor.options)},
             "smoothing": smo,
             "decimation": dec,
+            "cleanup": cln,
             "minVoxel": self.min_voxel,
             "labelTable": self.label_table,
             "segSource": self.seg_source,
@@ -118,6 +136,7 @@ def default_params() -> MeshParams:
         extractor=Extractor(),
         smoothing=Smoothing(),
         decimation=Decimation(),
+        cleanup=Cleanup(),
     )
 
 
@@ -133,6 +152,7 @@ def baseline_params() -> MeshParams:
         extractor=Extractor(name="vtk_contour_perlabel"),
         smoothing=Smoothing(method="laplacian", iterations=30, relaxation=0.1),
         decimation=Decimation(method="none"),
+        cleanup=Cleanup(method="none"),
         min_voxel=100,
     )
 
@@ -218,7 +238,19 @@ def parse_mesh_params(payload: dict) -> MeshParams:
         target_ratio=_num(dec_in, "targetRatio", base.decimation.target_ratio, 0.05, 1.0),
     )
 
+    # cleanup
+    cln_in = _axis(payload, "cleanup")
+    cln_method = cln_in.get("method", base.cleanup.method)
+    if cln_method not in ("none", "drop_small_components"):
+        raise ValueError("cleanup.method 화이트리스트 위반")
+    cln = Cleanup(
+        method=cln_method,
+        min_component_vox=int(
+            _num(cln_in, "minComponentVox", base.cleanup.min_component_vox, 0, 5000)
+        ),
+    )
+
     return MeshParams(
-        preprocess=pre, extractor=ext, smoothing=smo, decimation=dec,
+        preprocess=pre, extractor=ext, smoothing=smo, decimation=dec, cleanup=cln,
         min_voxel=int(_num(payload, "minVoxel", base.min_voxel, 0, 5000)),
     )

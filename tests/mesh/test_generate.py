@@ -9,6 +9,7 @@ import pytest
 import trimesh
 
 from mri2mesh.mesh import (
+    Cleanup,
     Decimation,
     Extractor,
     MeshParams,
@@ -122,6 +123,42 @@ def test_affine_applied_once_world_coordinates(tmp_path):
     # voxel 10..20 큐브의 world x = 100 + 2*10 .. 100 + 2*20 = 120..140
     assert mesh.bounds[0][0] == pytest.approx(120.0, abs=1.0)
     assert mesh.bounds[1][0] == pytest.approx(140.0, abs=1.0)
+
+
+def test_cleanup_drops_stray_component(tmp_path):
+    """본체 + 멀리 떨어진 파편이 든 라벨. cleanup=none이면 둘 다, 정리하면 본체만."""
+    import nibabel as nib
+
+    vol = np.zeros((40, 40, 40), dtype=np.uint8)
+    vol[5:15, 5:15, 5:15] = 1  # 본체 1000 voxel
+    vol[30:33, 30:33, 30:33] = 1  # 떠돌이 파편 27 voxel, 멀리
+    affine = np.diag([1.0, 1.0, 1.0, 1.0])
+    img = nib.Nifti1Image(vol, affine)
+    img.header.set_zooms((1.0, 1.0, 1.0))
+    seg = tmp_path / "stray.nii.gz"
+    nib.save(img, seg)
+
+    off = MeshParams(
+        preprocess=Preprocess(), extractor=Extractor(), smoothing=Smoothing(),
+        decimation=Decimation(), cleanup=Cleanup(method="none"), min_voxel=10,
+    )
+    on = MeshParams(
+        preprocess=Preprocess(), extractor=Extractor(), smoothing=Smoothing(),
+        decimation=Decimation(),
+        cleanup=Cleanup(method="drop_small_components", min_component_vox=50), min_voxel=10,
+    )
+
+    generate_variant(seg, tmp_path / "off", off, index=1)
+    r_on = generate_variant(seg, tmp_path / "on", on, index=1)
+
+    m_off = trimesh.load(tmp_path / "off" / "regions.glb").geometry["label_1"]
+    m_on = trimesh.load(tmp_path / "on" / "regions.glb").geometry["label_1"]
+    # 정리 전엔 두 덩어리(본체+파편), 후엔 하나
+    assert len(m_off.split(only_watertight=False)) == 2
+    assert len(m_on.split(only_watertight=False)) == 1
+    # 부피 지표는 정리 후 본체만 반영(파편 27 빠짐)
+    reg = {r["labelId"]: r for r in r_on.regions}[1]
+    assert reg["volumeMm3"] == 1000.0
 
 
 def test_unreadable_seg_raises(tmp_path):
