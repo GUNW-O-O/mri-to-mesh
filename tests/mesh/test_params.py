@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from mri2mesh.mesh import (
+    Cleanup,
     Decimation,
     Extractor,
     MeshParams,
@@ -22,6 +23,7 @@ def test_default_params_are_conservative():
     assert p.extractor.name == "skimage_mc"
     assert p.smoothing.method == "none"
     assert p.decimation.method == "none"
+    assert p.cleanup.method == "none"
     assert p.min_voxel == 100
     assert p.label_table == "canonical-v1"
 
@@ -51,6 +53,7 @@ def test_params_dict_uses_spec_camelcase():
         "method": "taubin", "iterations": 20, "passBand": 0.1, "featureAngle": 60.0
     }
     assert d["decimation"] == {"method": "quadric", "targetRatio": 0.35}
+    assert d["cleanup"] == {"method": "none"}  # 꺼졌으면 method만
     assert d["minVoxel"] == 100
     assert d["labelTable"] == "canonical-v1"
     assert d["segSource"] == "aparc.DKTatlas+aseg.deep.withCC.mgz"
@@ -105,6 +108,41 @@ def test_parse_fills_missing_axes_from_baseline():
     # 안 준 축은 baseline
     assert p.extractor.name == baseline_params().extractor.name
     assert p.min_voxel == 100
+
+
+def test_parse_cleanup_axis():
+    p = parse_mesh_params({"cleanup": {"method": "drop_small_components", "minComponentVox": 40}})
+    assert p.cleanup.method == "drop_small_components"
+    assert p.cleanup.min_component_vox == 40
+
+
+def test_parse_cleanup_defaults_to_none():
+    """cleanup 안 주면 baseline(none) — 기존 출력이 안 바뀐다."""
+    p = parse_mesh_params({})
+    assert p.cleanup.method == "none"
+
+
+def test_cleanup_active_appears_in_params_dict():
+    p = MeshParams(
+        preprocess=Preprocess(), extractor=Extractor(), smoothing=Smoothing(),
+        decimation=Decimation(), cleanup=Cleanup(method="drop_small_components", min_component_vox=25),
+    )
+    assert p.to_params_dict()["cleanup"] == {"method": "drop_small_components", "minComponentVox": 25}
+
+
+def test_cleanup_changes_variant_hash():
+    """정리 옵션이 다르면 다른 변형이다."""
+    a = default_params()
+    b = MeshParams(
+        preprocess=Preprocess(), extractor=Extractor(), smoothing=Smoothing(),
+        decimation=Decimation(), cleanup=Cleanup(method="drop_small_components", min_component_vox=30),
+    )
+    assert a.param_hash() != b.param_hash()
+
+
+def test_parse_rejects_unknown_cleanup_method():
+    with pytest.raises(ValueError):
+        parse_mesh_params({"cleanup": {"method": "shred"}})
 
 
 def test_parse_rejects_unknown_method():

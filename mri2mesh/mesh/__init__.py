@@ -5,6 +5,7 @@ canonical seg.nii.gz + 파라미터 조합 -> 변형 하나(GLB + 지표). 도�
 """
 
 from mri2mesh.mesh.params import (
+    Cleanup,
     Decimation,
     Extractor,
     MeshParams,
@@ -13,6 +14,7 @@ from mri2mesh.mesh.params import (
     baseline_params,
     default_params,
 )
+from mri2mesh.mesh.cleanup import drop_small_components
 from mri2mesh.mesh.extract import EXTRACTOR_NAMES, ExtractError, extract
 from mri2mesh.mesh.generate import GenerateError, VariantResult, generate_variant
 from mri2mesh.mesh.glb import GlbError, write_glb
@@ -21,6 +23,7 @@ from mri2mesh.mesh.postprocess import PostprocessError, decimate, smooth
 from mri2mesh.mesh.preprocess import apply_preprocess
 
 __all__ = [
+    "Cleanup",
     "Decimation",
     "Extractor",
     "MeshParams",
@@ -29,6 +32,7 @@ __all__ = [
     "baseline_params",
     "default_params",
     "apply_preprocess",
+    "drop_small_components",
     "EXTRACTOR_NAMES",
     "ExtractError",
     "extract",

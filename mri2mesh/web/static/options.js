@@ -44,6 +44,16 @@ const AXES = [
     help: '이 복셀 수 미만인 라벨 조각을 버려 노이즈를 없앤다. 클수록 작은 영역이 사라진다.',
     controls: [{ kind: 'number', name: '', def: 100, min: 0, max: 5000, step: 1 }],
   },
+  {
+    key: 'cleanup', label: '파편 정리 (cleanup)',
+    help: '라벨을 연결요소로 쪼개, 지정 복셀 수 미만 조각을 버린다. 뇌실 주변에 흩어진 ' +
+          '파편(스파이크의 원인)을 없앤다. none=끔. minComponentVox=이 값 미만 조각 제거 ' +
+          '(WM-hypointensities 등 다초점 구조는 낮게 잡아야 실제 병변이 남는다).',
+    controls: [
+      { kind: 'select', name: 'method', opts: ['none', 'drop_small_components'], def: 'none' },
+      { kind: 'number', name: 'minComponentVox', def: 30, min: 0, max: 5000, step: 1, unit: 'vox' },
+    ],
+  },
 ];
 
 function makeControl(c) {
@@ -107,6 +117,7 @@ export function buildOptionsForm() {
       extractor:  { name: strOf('extractor', 'name') },
       smoothing:  { method: strOf('smoothing', 'method'), iterations: numOf('smoothing', 'iterations') },
       decimation: { method: strOf('decimation', 'method'), targetRatio: numOf('decimation', 'targetRatio') },
+      cleanup:    { method: strOf('cleanup', 'method'), minComponentVox: numOf('cleanup', 'minComponentVox') },
       minVoxel:   numOf('minVoxel', ''),
     };
   };
