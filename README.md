@@ -29,6 +29,21 @@
 
 세그는 `seg.nii.gz`로 캐시되어, 파라미터만 바꾼 메시 재생성은 FastSurfer를 다시 돌리지 않는다(초 단위).
 
+## 메시 옵션 (변형 축)
+
+메시 생성 옵션은 **시리즈 선택 화면**에서 함께 고른다(세그 후 게이트가 아님). 세그는 옵션과 무관하게 항상 동일하고, 옵션만 바꿔 여러 변형을 나란히 비교한다. 안 건드리면 baseline(brainds 프로덕션 기준값)이 나온다.
+
+| 축 | 값 | baseline | 용도 |
+|----|----|----------|------|
+| `cleanup` | `none` · `drop_small_components`(+`minComponentVox`) | `none` | 라벨을 연결요소로 쪼개 작은 파편 제거 — 뇌실 주변 seg 파편이 만드는 스파이크를 없앤다 |
+| `preprocess` | `none` · `gaussian` · `distance` | `none` | 추출 전 마스크 다듬기(계단현상 완화) |
+| `extractor` | `vtk_contour_perlabel` · `skimage_mc` · `pymcubes` · `vtk_flyingedges` · `vtk_surfacenets` | `vtk_contour_perlabel` | 등가면 추출 알고리즘 |
+| `smoothing` | `laplacian` · `none` · `taubin` · `humphrey`(+`iterations`) | `laplacian` iter 30 | 표면 평탄화 |
+| `decimation` | `none` · `quadric`(+`targetRatio`) | `none` | 삼각형 감면(경량화) |
+| `minVoxel` | 정수 | `100` | 이 복셀 수 미만 라벨 전체를 스킵 |
+
+`cleanup`과 `minVoxel`은 다르다 — `minVoxel`은 **라벨 전체**를 버리고, `cleanup`은 한 라벨 **안의 작은 조각**만 솎는다. WM-hypointensities(라벨 33)처럼 다초점 구조는 `minComponentVox`를 낮게 잡아야 실제 병변이 남고 노이즈만 빠진다.
+
 ## 실행 (워크벤치)
 
 브라우저에서 업로드 → 시리즈 선택 → 진행률 → 3D 뷰어까지 도는 로컬 웹 UI. 외부 통신 0, `127.0.0.1`에만 바인드한다.
